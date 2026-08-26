@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:ignore="HardcodedText"
+    tools:context=".ui.MineFragment">
+
+    <TextView
+        android:id="@+id/text_mine_package_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="@dimen/dp_4"
+        android:padding="@dimen/dp_4"
+        android:text="当前包名:"
+        android:textAlignment="textStart"
+        android:textSize="20sp"
+        android:background="@drawable/shape_tv_common_bg"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        android:textColor="@color/black"
+        app:layout_constraintVertical_bias="0.274" />
+
+    <TextView
+        android:id="@+id/text_mine_export_data"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="@dimen/dp_4"
+        android:padding="@dimen/dp_4"
+        android:textAlignment="textStart"
+        android:textSize="20sp"
+        android:text="@string/export_data"
+        android:textColor="@color/black"
+        android:background="@drawable/shape_tv_common_bg"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/text_mine_package_name" />
+
+    <TextView
+        android:id="@+id/text_file_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="@dimen/dp_10"
+        android:layout_marginBottom="@dimen/dp_10"
+        android:layout_marginEnd="8dp"
+        android:textAlignment="textStart"
+        android:textSize="@dimen/sp_12"
+        android:text="@string/file_tips"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/text_mine_export_data"
+        tools:text="文件目录" />
+
+    <EditText
+        android:id="@+id/et_input_key"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/dp_30"
+        android:background="@drawable/tv_bg"
+        android:layout_marginStart="@dimen/dp_4"
+        android:layout_marginEnd="@dimen/dp_4"
+        android:inputType="text"
+        app:layout_constraintEnd_toEndOf="@id/text_file_info"
+        app:layout_constraintStart_toStartOf="@id/text_file_info"
+        app:layout_constraintTop_toBottomOf="@id/text_file_info"
+        />
+
+    <Button
+        android:id="@+id/btn_encrypt_data"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/dp_10"
+        android:text="加密数据"
+        app:layout_constraintEnd_toStartOf="@+id/btn_decrypt_data"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintHorizontal_chainStyle="spread_inside"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/et_input_key"
+        tools:ignore="HardcodedText" />
+
+    <Button
+        android:id="@+id/btn_decrypt_data"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="@dimen/dp_10"
+        android:text="解密数据"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/btn_encrypt_data"
+        app:layout_constraintTop_toTopOf="@id/btn_encrypt_data"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:id="@+id/text_process"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:textSize="20sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btn_encrypt_data"
+        tools:text="进度" />
+
+    <TextView
+        android:id="@+id/text_log"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="10dp"
+        android:background="@drawable/tv_log_bg"
+        android:gravity="start"
+        android:minHeight="@dimen/dp_200"
+        android:textAlignment="textStart"
+        android:textColor="@android:color/holo_green_dark"
+        android:textIsSelectable="true"
+        android:textSize="@dimen/sp_12"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/text_process"
+        tools:ignore="SmallSp"
+        tools:text="日志" />
+</androidx.constraintlayout.widget.ConstraintLayout>

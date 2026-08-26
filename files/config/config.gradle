@@ -1,0 +1,153 @@
+/*
+    This file is common gradle config, use this to avoid hand-work
+ *
+ */
+// add resp remote url
+static def addRepos(RepositoryHandler handler) {
+    // add aliyun resp url to build fast
+    handler.maven{ url 'http://maven.aliyun.com/nexus/content/groups/public/'}
+    handler.maven { url 'https://maven.aliyun.com/repository/google' }
+    handler.maven{ url 'https://maven.aliyun.com/repository/jcenter'}
+    handler.maven { url 'https://maven.aliyun.com/repository/central' }
+    // origin resp remote url
+    handler.maven { url 'https://jitpack.io' }
+    handler.google()
+    handler.jcenter()
+    handler.maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
+}
+ext.addRepos = this.&addRepos
+
+ext.appBaseName = "TheBook"
+
+def android_sdk = [:]
+android_sdk.minSdkVersion =  21
+android_sdk.targetSdkVersion = 28
+android_sdk.compileSdkVersion = 29
+android_sdk.buildToolsVersion = "29.0.3"
+
+ext.android_sdk = android_sdk
+
+def deps = [:]
+
+def androidx = [:]
+// room
+androidx.room = "androidx.room:room-runtime:2.2.5"
+androidx.room_apt = "androidx.room:room-compiler:2.2.5"
+androidx.room_ktx = "androidx.room:room-ktx:2.2.5"
+androidx.room_rxjava2 = "androidx.room:room-rxjava2:2.2.5"
+androidx.room_test_helper = "androidx.room:room-testing:2.2.5"
+// live data
+
+androidx.viewmodel = "androidx.lifecycle:lifecycle-viewmodel-ktx:2.2.0"
+androidx.livedata = "androidx.lifecycle:lifecycle-livedata-ktx:2.2.0"
+// lifecycle without ViewModel or LiveData
+androidx.lifecycle = "androidx.lifecycle:lifecycle-runtime-ktx:2.2.0"
+androidx.lifecycle_apt = "androidx.lifecycle:lifecycle-compiler:2.2.0"
+
+androidx.recyclerview = "androidx.recyclerview:recyclerview:1.1.0"
+androidx.cardview = "androidx.cardview:cardview:1.0.0"
+androidx.viewpager2 = "androidx.viewpager2:viewpager2:1.0.0"
+androidx.material = "com.google.android.material:material:1.2.1"
+deps.androidx = androidx
+
+// UI
+
+def ui = [:]
+ui.lottie = "com.airbnb.android:lottie:3.4.1"
+ui.banner = "com.youth.banner:banner:2.0.12"
+ui.baserecyclerviewadapter = "com.github.CymChad:BaseRecyclerViewAdapterHelper:3.0.4"
+ui.swiperecyclerview = "com.yanzhenjie.recyclerview:x:1.3.2"
+ui.smartrefreshlayout_kernel = "com.scwang.smart:refresh-layout-kernel:2.0.1"
+ui.smartrefreshlayout_header_classics = "com.scwang.smart:refresh-header-classics:2.0.1"
+ui.smartrefreshlayout_header_radar = "com.scwang.smart:refresh-header-radar:2.0.1"
+ui.smartrefreshlayout_header_falsify = "com.scwang.smart:refresh-header-falsify:2.0.1"
+ui.smartrefreshlayout_header_material = "com.scwang.smart:refresh-header-material:2.0.1"
+ui.smartrefreshlayout_header_two_level = "com.scwang.smart:refresh-header-two-level:2.0.1"
+ui.smartrefreshlayout_footer_ball = "com.scwang.smart:refresh-footer-ball:2.0.1"
+ui.smartrefreshlayout_footer_classics = "com.scwang.smart:refresh-footer-classics:2.0.1"
+ui.magicIndicator = "com.github.hackware1993:MagicIndicator:1.5.0"
+
+deps.ui = ui
+
+def chart = [:]
+chart.mpandroidchart = "com.github.PhilJay:MPAndroidChart:v3.1.0"
+chart.hellochart = "com.github.lecho:hellocharts-android:v1.5.8"
+// it's seems echart need to download it's jar to invoke, no gradle introduce
+chart.echart = ""
+
+deps.chart = chart
+
+// Debug
+def debug = [:]
+debug.leakcanary = "com.squareup.leakcanary:leakcanary-android:2.4"
+debug.logger = "com.orhanobut:logger:2.2.0"
+debug.android_debug_databases = "com.amitshekhar.android:debug-db:1.0.6"
+debug.android_debug_databases_encrypt = "com.amitshekhar.android:debug-db-encrypt:1.0.6"
+deps.debug = debug
+
+// network or web content parser
+def network = [:]
+network.okhttp = "com.squareup.okhttp3:okhttp:4.7.2"
+network.okhttp_mockwebserver = "com.squareup.okhttp3:mockwebserver:4.7.2"
+network.retrofit = "com.squareup.retrofit2:retrofit:2.9.0"
+network.retrofit_converter_gson = "com.squareup.retrofit2:converter-gson:2.9.0"
+network.retrofit_converter_simplexml = "com.squareup.retrofit2:converter-simplexml:2.9.0"
+network.gson = "com.google.code.gson:gson:2.8.6"
+network.protobuf = "com.google.protobuf:protobuf-java:3.12.2"
+network.fastjson = "com.alibaba:fastjson:1.2.73"
+
+network.webmagic = "us.codecraft.webmagic-core.0.7.3"
+
+deps.network = network
+
+// imageLoader
+def imageLoader = [:]
+imageLoader.glide = "com.github.bumptech.glide:glide:4.11.0"
+imageLoader.fresco = "com.facebook.fresco:fresco:2.0.0"
+imageLoader.picasso = "com.squareup.picasso:picasso:2.71828"
+deps.imageLoader = imageLoader
+// event
+
+def event = [:]
+event.rxjava2 = "io.reactivex.rxjava2:rxjava:2.2.19"
+event.rxandroid2 = "io.reactivex.rxjava2:rxandroid:2.1.1"
+event.rxjava3 = "io.reactivex.rxjava3:rxjava:3.0.4"
+event.rxandroid3 = "io.reactivex.rxjava3:rxandroid:3.0.0"
+event.eventbus = "org.greenrobot:eventbus:3.2.0"
+
+deps.event = event
+
+// database connector like mysql oracle etc...
+
+def database_connector = [:]
+database_connector.sqlite = ""
+database_connector.mysql = ""
+database_connector.oracle = ""
+database_connector.sqlserver = ""
+database_connector.postgrepsql = ""
+deps.database_connector = database_connector
+
+// data_parse
+
+def data_parser = [:]
+data_parser.jxl = "net.sourceforge.jexcelapi:jxl:2.6.12"
+data_parser.poi = "org.apache.poi:poi:4.1.2"
+data_parser.easyexcel = "com.alibaba.easyexcel:2.2.6"
+data_parser.jsoup = "org.jsoup.jsoup.1.13.1"
+
+deps.data_parser = data_parser
+
+
+def injector = [:]
+injector.dagger2 = ""
+
+deps.injector = injector
+
+def tools = [:]
+tools.android_util = "com.blankj:utilcodex:1.29.0"
+
+
+deps.tools = tools
+
+ext.deps = deps
+

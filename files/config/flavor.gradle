@@ -1,0 +1,93 @@
+// 构建不同风味的apk
+
+def gitHash() {
+    def stdout = new ByteArrayOutputStream()
+    def result = exec {
+        commandLine 'git', 'rev-parse', '--short', 'HEAD'
+        standardOutput = stdout
+        errorOutput = new ByteArrayOutputStream()
+        ignoreExitValue = true
+    }
+    def hash = stdout.toString().trim()
+    return result.exitValue == 0 && hash ? hash : "nogit"
+}
+
+def gitCommitTimes() {
+    def stdout = new ByteArrayOutputStream()
+    def result = exec {
+        commandLine 'git', 'rev-list', '--count', 'HEAD'
+        standardOutput = stdout
+        errorOutput = new ByteArrayOutputStream()
+        ignoreExitValue = true
+    }
+    def count = stdout.toString().trim()
+    return result.exitValue == 0 && count ? count : "1"
+}
+
+static def releaseTime() {
+    return new Date().format("yyyyMMddHHmm", TimeZone.getTimeZone("GMT+08:00"))
+}
+
+android {
+    def releaseKeyStorePath = System.getenv("APK_SIGN_FILE_STORE")
+    def hasReleaseSigning = releaseKeyStorePath != null && !releaseKeyStorePath.trim().isEmpty()
+    if (hasReleaseSigning) {
+        signingConfigs {
+            release {
+                keyAlias System.getenv("APK_SIGN_ALIAS")
+                keyPassword System.getenv("APK_SIGN_PASSWD")
+                storePassword System.getenv("APK_SIGN_PASSWD")
+                storeFile file(releaseKeyStorePath)
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+			shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+//            manifestPlaceholders = [ApkName : "正式App",
+            manifestPlaceholders = [ApkName : "@string/app_name"]
+//                                    logo : "@mipmap/ic_launcher"]
+//            buildConfigField("String", "BaseUrl", '"http://xxxxx/api"')
+//            resValue("string", "apk_name", "@string/application_name_release")
+
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
+
+        debug {
+            applicationIdSuffix ".debug"
+            manifestPlaceholders = [ApkName : "@string/app_name_debug"]
+//            manifestPlaceholders = [ApkName : "测试App",
+//                                    logo : "@mipmap/ic_launcher"]
+//            buildConfigField("String", "BaseUrl", '"http://xxxxx/api"')
+//            resValue("string", "apk_name", "@string/application_name_debug")
+        }
+    }
+
+
+    android.applicationVariants.all { variant ->
+        variant.outputs.all { item ->
+            if (buildType.name == 'release') {
+                variant.getPackageApplicationProvider().get().outputDirectory = new File(project.rootDir.absolutePath + "/release/")
+                outputFileName = "${project.ext.appBaseName}-v${variant.versionName}-${gitHash()}-${releaseTime()}.apk".trim()
+                item.versionCodeOverride = gitCommitTimes().toInteger()
+                item.versionNameOverride = gitHash()
+            } else if (buildType.name == 'debug') {
+                outputFileName = "${project.ext.appBaseName}-debug-v${variant.versionName}-${gitHash()}-${releaseTime()}.apk".trim()
+                item.versionCodeOverride = gitCommitTimes().toInteger()
+                item.versionNameOverride = gitHash()
+            } else {
+                outputFileName = "${project.ext.appBaseName}-v${variant.versionName}-${gitHash()}-${releaseTime()}.apk".trim()
+                item.versionCodeOverride = gitCommitTimes().toInteger()
+                item.versionNameOverride = gitHash()
+            }
+        }
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+}

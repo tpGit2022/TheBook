@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">TheBook</string>
+    <string name="app_name_debug">DTheBook</string>
+    <string name="x_recycler_data_empty">There is no data</string>
+    <string name="x_recycler_more_not">No more data</string>
+    <string name="x_recycler_click_load_more">Click to load more</string>
+    <string name="x_recycler_load_error">Error, please try again</string>
+    <string name="x_recycler_load_more_message">Loading, please wait later</string>
+    <string name="application_name_release">TheBook</string>
+    <string name="application_name_debug">BookDebug</string>
+    <string name="title_mine">我的</string>
+    <string name="title_statistics">统计</string>
+    <string name="title_record">记录</string>
+    <string name="statistics_tip">近月统计:</string>
+    <string name="exit_app_without_permission">您拒绝了App运行所必须的权限，App将会退出</string>
+    <string name="btn_ok">确定</string>
+    <string name="btn_yes">是</string>
+    <string name="btn_no">否</string>
+    <string name="export_data">数据导出</string>
+    <string name="export_data_tip">请选择导出文件%s的存储位置</string>
+    <string name="file_tips">文件目录:</string>
+    <string name="tip_permission_request">由于Android系统限制，需要手动开启文件管理权限功能，是否跳转开启，拒绝将退出App?</string>
+</resources>

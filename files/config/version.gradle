@@ -1,0 +1,21 @@
+ext.gitBranch = { ->
+    return 'git rev-parse --abbrev-ref HEAD'.execute().text.trim()
+}
+
+ext.gitVersionCode = { path ->
+    String s = ('bash +x ../script/version_code_from_git.sh ' + path).execute().text.trim()
+    if (s.isInteger()) {
+        int code = 1000 + s.toInteger()
+        println('../script/version_code_from_git.sh ' + path + ' -> ' + code)
+        return code
+    } else {
+        println('gitVersionCode failed, set version code to 1')
+    }
+    return rootProject.ext.android.versionCode
+}
+
+ext.gitHash = { path ->
+    String hash = ('bash +x ../script/hash_code_from_git.sh ' + path).execute().text.trim()
+    println('../script/hash_code_from_git.sh ' + path + ' -> ' + hash)
+    return hash
+}

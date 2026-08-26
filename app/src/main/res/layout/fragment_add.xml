@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.AddFragment"
+    tools:ignore="HardcodedText">
+
+    <TextView
+        android:id="@+id/text_insert_zero"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/dp_10"
+        android:background="@drawable/shape_tv_common_bg"
+        android:gravity="center"
+        android:minHeight="@dimen/dp_40"
+        android:padding="@dimen/dp_6"
+        android:text="zero"
+        android:textAlignment="center"
+        android:textColor="@android:color/black"
+        android:textSize="20sp"
+        app:layout_constraintBottom_toTopOf="@id/tv_history_tip"
+        app:layout_constraintEnd_toStartOf="@id/text_insert_sleep"
+        app:layout_constraintHorizontal_chainStyle="spread"
+        app:layout_constraintHorizontal_weight="1"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintWidth_percent="0.3"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:id="@+id/text_insert_sleep"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/shape_tv_common_bg"
+        android:gravity="center"
+        android:minHeight="@dimen/dp_40"
+        android:padding="@dimen/dp_6"
+        android:text="sleep"
+        android:textAlignment="center"
+        android:textColor="@android:color/black"
+        android:textSize="20sp"
+        app:layout_constraintBottom_toTopOf="@id/tv_history_tip"
+        app:layout_constraintEnd_toStartOf="@id/text_insert_azero"
+        app:layout_constraintHorizontal_weight="1"
+        app:layout_constraintStart_toEndOf="@+id/text_insert_zero"
+        app:layout_constraintTop_toTopOf="@id/text_insert_zero"
+        app:layout_constraintVertical_bias="0.0"
+        app:layout_constraintWidth_percent="0.3" />
+
+    <TextView
+        android:id="@+id/text_insert_azero"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/shape_tv_common_bg"
+        android:gravity="center"
+        android:minHeight="@dimen/dp_40"
+        android:padding="@dimen/dp_6"
+        android:text="azero"
+        android:textAlignment="center"
+        android:textColor="@android:color/black"
+        android:textSize="20sp"
+        app:layout_constraintBottom_toTopOf="@id/tv_history_tip"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_weight="1"
+        app:layout_constraintStart_toEndOf="@id/text_insert_sleep"
+        app:layout_constraintTop_toTopOf="@id/text_insert_zero"
+        app:layout_constraintVertical_bias="0.0"
+        app:layout_constraintWidth_percent="0.3" />
+
+    <TextView
+        android:id="@+id/tv_history_tip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/dp_10"
+        android:layout_marginTop="@dimen/dp_10"
+        android:text="历史最高:"
+        app:layout_constraintHorizontal_chainStyle="spread"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/text_insert_zero" />
+
+    <TextView
+        android:id="@+id/tv_last_top"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1"
+        android:textColor="#689F38"
+        android:textSize="@dimen/sp_30"
+        app:layout_constraintBaseline_toBaselineOf="@id/tv_history_tip"
+        app:layout_constraintStart_toEndOf="@id/tv_history_tip"
+        app:layout_constraintTop_toTopOf="@id/tv_history_tip"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:id="@+id/tv_current_tip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/dp_10"
+        android:text="当前:"
+        app:layout_constraintBaseline_toBaselineOf="@id/tv_history_tip"
+        app:layout_constraintStart_toEndOf="@id/tv_last_top"
+        app:layout_constraintTop_toTopOf="@id/tv_history_tip"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:id="@+id/tv_current_top"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0"
+        android:textColor="#EF6C00"
+        android:textSize="@dimen/sp_20"
+        app:layout_constraintBaseline_toBaselineOf="@id/tv_history_tip"
+        app:layout_constraintStart_toEndOf="@id/tv_current_tip"
+        app:layout_constraintTop_toTopOf="@id/tv_history_tip"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:id="@+id/tv_history_detail_tip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="历史前六:"
+        app:layout_constraintStart_toStartOf="@id/tv_history_tip"
+        app:layout_constraintTop_toBottomOf="@id/tv_history_tip" />
+
+    <TextView
+        android:id="@+id/tv_history_detail_content"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintBottom_toTopOf="@id/rv"
+        app:layout_constraintStart_toStartOf="@id/tv_history_detail_tip"
+        app:layout_constraintTop_toBottomOf="@id/tv_history_detail_tip"
+        tools:text="这里是历史最高数据" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_margin="@dimen/dp_4"
+        android:background="@color/gray_5F5F5"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tv_history_detail_content"
+        app:layout_constraintVertical_bias="0.038"
+        app:layout_constraintVertical_weight="1" />
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>
