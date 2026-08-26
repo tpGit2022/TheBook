@@ -3,7 +3,6 @@ package com.seeksky.thebook.ui
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -12,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.afollestad.materialdialogs.MaterialDialog
@@ -139,7 +139,10 @@ class MineFragment : Fragment() {
             android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
             android.Manifest.permission.READ_EXTERNAL_STORAGE
         )
-            .setDialogTintColor(Color.parseColor("#6200EE"), Color.parseColor("#3700B3"))
+            .setDialogTintColor(
+                ContextCompat.getColor(requireContext(), R.color.brand_primary),
+                ContextCompat.getColor(requireContext(), R.color.text_secondary)
+            )
             .onExplainRequestReason { scope, deniedList ->
                 val message = "ToolBox需要以下权限:"
                 scope.showRequestReasonDialog(deniedList, message, "确认", "取消")

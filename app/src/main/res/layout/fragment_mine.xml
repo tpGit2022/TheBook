@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/app_background"
     tools:ignore="HardcodedText"
     tools:context=".ui.MineFragment">
 
@@ -21,7 +22,7 @@
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        android:textColor="@color/black"
+        android:textColor="@color/text_primary"
         app:layout_constraintVertical_bias="0.274" />
 
     <TextView
@@ -33,7 +34,7 @@
         android:textAlignment="textStart"
         android:textSize="20sp"
         android:text="@string/export_data"
-        android:textColor="@color/black"
+        android:textColor="@color/text_primary"
         android:background="@drawable/shape_tv_common_bg"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -62,6 +63,8 @@
         android:layout_marginStart="@dimen/dp_4"
         android:layout_marginEnd="@dimen/dp_4"
         android:inputType="text"
+        android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_secondary"
         app:layout_constraintEnd_toEndOf="@id/text_file_info"
         app:layout_constraintStart_toStartOf="@id/text_file_info"
         app:layout_constraintTop_toBottomOf="@id/text_file_info"
@@ -116,7 +119,7 @@
         android:gravity="start"
         android:minHeight="@dimen/dp_200"
         android:textAlignment="textStart"
-        android:textColor="@android:color/holo_green_dark"
+        android:textColor="@color/log_text"
         android:textIsSelectable="true"
         android:textSize="@dimen/sp_12"
         app:layout_constraintBottom_toBottomOf="parent"

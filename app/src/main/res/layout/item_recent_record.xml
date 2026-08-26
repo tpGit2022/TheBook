@@ -15,7 +15,7 @@
         android:id="@+id/tvTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="@android:color/black"
+        android:textColor="@color/text_primary"
         android:textSize="16sp"
         tools:text="Zero" />
 
@@ -23,7 +23,7 @@
         android:id="@+id/tvTime"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#757575"
+        android:textColor="@color/text_secondary"
         android:textSize="13sp"
         tools:text="2020-09-10 10:23:32" />
 </LinearLayout>

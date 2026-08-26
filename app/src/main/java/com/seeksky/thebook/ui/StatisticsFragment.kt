@@ -1,12 +1,14 @@
 package com.seeksky.thebook.ui
 
-import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.ColorRes
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import com.github.mikephil.charting.charts.BarLineChartBase
 import com.github.mikephil.charting.components.AxisBase
 import com.github.mikephil.charting.components.Description
 import com.github.mikephil.charting.components.LimitLine
@@ -15,6 +17,7 @@ import com.github.mikephil.charting.data.*
 import com.github.mikephil.charting.formatter.IAxisValueFormatter
 import com.github.mikephil.charting.formatter.IValueFormatter
 import com.github.mikephil.charting.highlight.Highlight
+import com.seeksky.thebook.R
 import com.seeksky.thebook.data.DailyGap
 import com.seeksky.thebook.database.AppDatabase
 import com.seeksky.thebook.database.entry.Daily
@@ -53,6 +56,10 @@ class StatisticsFragment : Fragment() {
 
         _binding = FragmentStatisticBinding.inflate(inflater, container, false)
         val root: View = binding.root
+
+        applyChartTheme(binding.lineChart)
+        applyChartTheme(binding.barchartMonth)
+        applyChartTheme(binding.barchartGap)
 
 //        val textView: TextView = binding.textHome
 //        dashboardViewModel.text.observe(viewLifecycleOwner) {
@@ -102,6 +109,33 @@ class StatisticsFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    private fun themeColor(@ColorRes colorRes: Int): Int {
+        return ContextCompat.getColor(requireContext(), colorRes)
+    }
+
+    private fun applyChartTheme(chart: BarLineChartBase<*>) {
+        val axisColor = themeColor(R.color.chart_axis)
+        val gridColor = themeColor(R.color.chart_grid)
+        val secondaryTextColor = themeColor(R.color.text_secondary)
+
+        chart.setBackgroundColor(themeColor(R.color.app_surface))
+        chart.setNoDataTextColor(secondaryTextColor)
+        chart.legend.textColor = secondaryTextColor
+        chart.description.textColor = secondaryTextColor
+
+        chart.xAxis.textColor = axisColor
+        chart.xAxis.axisLineColor = axisColor
+        chart.xAxis.gridColor = gridColor
+
+        chart.axisLeft.textColor = axisColor
+        chart.axisLeft.axisLineColor = axisColor
+        chart.axisLeft.gridColor = gridColor
+
+        chart.axisRight.textColor = axisColor
+        chart.axisRight.axisLineColor = axisColor
+        chart.axisRight.gridColor = gridColor
     }
 
 
@@ -236,23 +270,23 @@ class StatisticsFragment : Fragment() {
         val avge = sum.toFloat() / list.size
 
         val avge_line = LimitLine(avge, String.format("%.1f", avge))
-        avge_line.lineColor = Color.BLUE
+        avge_line.lineColor = themeColor(R.color.chart_average)
         avge_line.lineWidth = 0.6f
-        avge_line.textColor = Color.BLACK
+        avge_line.textColor = themeColor(R.color.chart_average)
         avge_line.textSize = 8f
         avge_line.enableDashedLine(5f, 20f, 0f)
 
         val min_line = LimitLine(min.toFloat(), String.format("%d", min))
-        min_line.lineColor = Color.GREEN
+        min_line.lineColor = themeColor(R.color.chart_minimum)
         min_line.lineWidth = 0.6f
-        min_line.textColor = Color.GREEN
+        min_line.textColor = themeColor(R.color.chart_minimum)
         min_line.textSize = 8f
         min_line.enableDashedLine(5f, 20f, 0f)
 
         val max_line = LimitLine(max.toFloat(), String.format("%d", max))
-        max_line.lineColor = Color.RED
+        max_line.lineColor = themeColor(R.color.chart_maximum)
         max_line.lineWidth = 0.6f
-        max_line.textColor = Color.RED
+        max_line.textColor = themeColor(R.color.chart_maximum)
         max_line.textSize = 8f
         max_line.enableDashedLine(5f, 20f, 0f)
 
@@ -264,11 +298,11 @@ class StatisticsFragment : Fragment() {
     }
 
     private fun linePropertiesInit(line: LineDataSet) {
-        line.color = Color.parseColor("#98FB98")
+        line.color = themeColor(R.color.chart_line)
 
         line.circleRadius = 1.2f
         val circleColors = ArrayList<Int>()
-        circleColors.add(Color.parseColor("#FF3300"))
+        circleColors.add(themeColor(R.color.chart_point))
         line.circleColors = circleColors
         line.setDrawValues(false) //
         line.setDrawCircles(true)
@@ -354,7 +388,7 @@ class StatisticsFragment : Fragment() {
                 max = max.coerceAtLeast(month_times)
             }
             val dataSet = BarDataSet(monthStatBarChartDataSource, "近24月情况")
-            dataSet.color = Color.parseColor("#98FB98")
+            dataSet.color = themeColor(R.color.chart_line)
             dataSet.setDrawValues(false)  //设置是否在柱状图单柱上显示当前数据
 //            设置数据显示的格式，本来是float将其转为int后再转string消除小数部分
             dataSet.valueFormatter =
@@ -367,23 +401,23 @@ class StatisticsFragment : Fragment() {
 //            add limit line
             val average = (sum * 1.0f) / data_size
             val avge_line = LimitLine(average, String.format("%.1f", average))
-            avge_line.lineColor = Color.BLUE
+            avge_line.lineColor = themeColor(R.color.chart_average)
             avge_line.lineWidth = 0.6f
-            avge_line.textColor = Color.BLACK
+            avge_line.textColor = themeColor(R.color.chart_average)
             avge_line.textSize = 8f
             avge_line.enableDashedLine(5f, 20f, 0f)
 
             val min_line = LimitLine(min.toFloat(), String.format("%d", min))
-            min_line.lineColor = Color.GREEN
+            min_line.lineColor = themeColor(R.color.chart_minimum)
             min_line.lineWidth = 0.6f
-            min_line.textColor = Color.GREEN
+            min_line.textColor = themeColor(R.color.chart_minimum)
             min_line.textSize = 8f
             min_line.enableDashedLine(5f, 20f, 0f)
 
             val max_line = LimitLine(max.toFloat(), String.format("%d", max))
-            max_line.lineColor = Color.RED
+            max_line.lineColor = themeColor(R.color.chart_maximum)
             max_line.lineWidth = 0.6f
-            max_line.textColor = Color.RED
+            max_line.textColor = themeColor(R.color.chart_maximum)
             max_line.textSize = 8f
             max_line.enableDashedLine(5f, 20f, 0f)
 
@@ -479,7 +513,7 @@ class StatisticsFragment : Fragment() {
 
                     barChart.apply {
                         val barDataSet = BarDataSet(entries, "间隔")
-                        barDataSet.color = Color.parseColor("#98FB98")
+                        barDataSet.color = themeColor(R.color.chart_line)
                         val barData = BarData(barDataSet)
                         barChart.data = barData
                         barChart.data.setDrawValues(false) //不绘制柱状图顶部的当前具体数值
@@ -497,12 +531,12 @@ class StatisticsFragment : Fragment() {
 //                        xAxis.setLabelCount(30 , true)
 //                        xAxis.setDrawLabels(false)
                         xAxis.setDrawGridLines(false)
-                        xAxis.gridColor = Color.RED
+                        xAxis.gridColor = themeColor(R.color.chart_grid)
                         xAxis.axisLineWidth = 2f
-                        xAxis.axisLineColor = Color.BLACK
+                        xAxis.axisLineColor = themeColor(R.color.chart_axis)
 //                        xAxis.gridLineWidth = 0.25f
 //                        xAxis.axisMinimum = -4.0f
-                        xAxis.textSize = 1.0f
+                        xAxis.textSize = 8.0f
 
 
 
@@ -511,7 +545,7 @@ class StatisticsFragment : Fragment() {
                         yAxis.isEnabled = true
                         yAxis.setDrawGridLines(false)
                         yAxis.axisLineWidth = 2f
-                        yAxis.axisLineColor = Color.BLACK
+                        yAxis.axisLineColor = themeColor(R.color.chart_axis)
                         yAxis.axisMinimum = 0f //解决数据Y值为0时不跟X轴重合问题
                         yAxis.spaceTop = 30f
 
@@ -523,23 +557,23 @@ class StatisticsFragment : Fragment() {
 //                        add limit line
                         val average = (sum * 1.0f) / t.size
                         val avge_line = LimitLine(average, String.format("%.1f", average))
-                        avge_line.lineColor = Color.BLUE
+                        avge_line.lineColor = themeColor(R.color.chart_average)
                         avge_line.lineWidth = 0.6f
-                        avge_line.textColor = Color.BLACK
+                        avge_line.textColor = themeColor(R.color.chart_average)
                         avge_line.textSize = 8f
                         avge_line.enableDashedLine(5f, 20f, 0f)
 
                         val min_line = LimitLine(min.toFloat(), String.format("%d", min))
-                        min_line.lineColor = Color.GREEN
+                        min_line.lineColor = themeColor(R.color.chart_minimum)
                         min_line.lineWidth = 0.6f
-                        min_line.textColor = Color.GREEN
+                        min_line.textColor = themeColor(R.color.chart_minimum)
                         min_line.textSize = 8f
                         min_line.enableDashedLine(5f, 20f, 0f)
 
                         val max_line = LimitLine(max.toFloat(), String.format("%d", max))
-                        max_line.lineColor = Color.RED
+                        max_line.lineColor = themeColor(R.color.chart_maximum)
                         max_line.lineWidth = 0.6f
-                        max_line.textColor = Color.RED
+                        max_line.textColor = themeColor(R.color.chart_maximum)
                         max_line.textSize = 8f
                         max_line.enableDashedLine(5f, 20f, 0f)
 

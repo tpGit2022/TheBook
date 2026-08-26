@@ -1,4 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="text_color">#DE000000</color>
+    <color name="brand_primary">#81C784</color>
+    <color name="brand_primary_variant">#2E7D32</color>
+    <color name="on_brand_primary">#102A13</color>
+    <color name="brand_secondary">#80CBC4</color>
+    <color name="brand_secondary_variant">#397D76</color>
+    <color name="on_brand_secondary">#05201D</color>
+
+    <color name="app_background">#121212</color>
+    <color name="app_surface">#1E1E1E</color>
+    <color name="app_surface_variant">#292929</color>
+    <color name="text_primary">#E6E6E6</color>
+    <color name="text_secondary">#B8B8B8</color>
+    <color name="outline">#5E625E</color>
+
+    <color name="status_positive">#AED581</color>
+    <color name="status_attention">#FFB74D</color>
+
+    <color name="chart_line">#81C784</color>
+    <color name="chart_point">#EF9A9A</color>
+    <color name="chart_average">#90CAF9</color>
+    <color name="chart_minimum">#A5D6A7</color>
+    <color name="chart_maximum">#EF9A9A</color>
+    <color name="chart_axis">#C8CEC8</color>
+    <color name="chart_grid">#454945</color>
+
+    <color name="log_background">#101410</color>
+    <color name="log_text">#9CCC65</color>
+
+    <color name="text_color">@color/text_primary</color>
 </resources>

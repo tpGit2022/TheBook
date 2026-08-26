@@ -1,7 +1,6 @@
 package com.seeksky.thebook
 
 import android.content.Intent
-import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -9,6 +8,7 @@ import android.os.Environment
 import android.provider.Settings
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
@@ -73,7 +73,10 @@ class MainActivity : AppCompatActivity() {
                     android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
                     android.Manifest.permission.READ_EXTERNAL_STORAGE
                 )
-                    .setDialogTintColor(Color.parseColor("#6200EE"), Color.parseColor("#3700B3"))
+                    .setDialogTintColor(
+                        ContextCompat.getColor(this, R.color.brand_primary),
+                        ContextCompat.getColor(this, R.color.text_secondary)
+                    )
                     .onExplainRequestReason { scope, deniedList ->
                         val message = "TheBook需要以下权限:"
                         scope.showRequestReasonDialog(deniedList, message, "确认", "取消")
@@ -116,7 +119,10 @@ class MainActivity : AppCompatActivity() {
                 android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
                 android.Manifest.permission.READ_EXTERNAL_STORAGE
             )
-                .setDialogTintColor(Color.parseColor("#6200EE"), Color.parseColor("#3700B3"))
+                .setDialogTintColor(
+                    ContextCompat.getColor(this, R.color.brand_primary),
+                    ContextCompat.getColor(this, R.color.text_secondary)
+                )
                 .onExplainRequestReason { scope, deniedList ->
                     val message = "TheBook需要以下权限:"
                     scope.showRequestReasonDialog(deniedList, message, "确认", "取消")
@@ -138,4 +144,3 @@ class MainActivity : AppCompatActivity() {
 
     }
 }
-
