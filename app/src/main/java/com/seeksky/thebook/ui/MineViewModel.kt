@@ -14,6 +14,9 @@ import com.seeksky.thebook.App
 import com.seeksky.thebook.database.AppDatabase
 import com.seeksky.thebook.database.entry.Daily
 import com.seeksky.thebook.tool.applySchedulers
+import com.seeksky.thebook.tool.createMonthStats
+import com.seeksky.thebook.tool.parseDailyBackup
+import com.seeksky.thebook.tool.toRecordKey
 import com.seeksky.toolbox.tool.OnProcessListener
 import com.seeksky.toolbox.tool.decryptBigFileWithAES256
 import com.seeksky.toolbox.tool.encryptBigFileWithAES256
@@ -39,6 +42,29 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+enum class DataImportMode {
+    MERGE,
+    REPLACE
+}
+
+sealed class DataImportState {
+    object Idle : DataImportState()
+    object Reading : DataImportState()
+    object Importing : DataImportState()
+    data class Preview(val recordCount: Int, val duplicateCount: Int) : DataImportState()
+    data class Success(
+        val mode: DataImportMode,
+        val importedCount: Int,
+        val skippedCount: Int
+    ) : DataImportState()
+    data class Error(val message: String) : DataImportState()
+}
+
+private data class ImportInspection(
+    val records: List<Daily>,
+    val duplicateCount: Int
+)
+
 class MineViewModel(application: Application) : AndroidViewModel(application) {
     private val getContentResolver by lazy {
         getApplication<App>().contentResolver
@@ -48,6 +74,10 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
         value = "数据导出"
     }
     val exportText: LiveData<String> = _exportText
+
+    private val _importState = MutableLiveData<DataImportState>(DataImportState.Idle)
+    val importState: LiveData<DataImportState> = _importState
+    private var pendingImportRecords: List<Daily> = emptyList()
 
     private val _mTextDirInfo: MutableLiveData<String> = MutableLiveData()
     val dirText: LiveData<String> get() = _mTextDirInfo
@@ -205,11 +235,10 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
         }.compose(applySchedulers()).subscribe(object:
             Observer<List<Daily>> {
             override fun onComplete() {
-                ToastUtils.showLong("数据导出成功!")
             }
 
             override fun onSubscribe(d: Disposable) {
-
+                disposables.add(d)
             }
 
             override fun onNext(t: List<Daily>) {
@@ -222,8 +251,131 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
 
             override fun onError(e: Throwable) {
                 e.printStackTrace()
+                ToastUtils.showLong("导出数据失败：${e.message.orEmpty()}")
             }
         })
+    }
+
+    fun prepareDataImport(uri: Uri) {
+        if (_importState.value == DataImportState.Reading ||
+            _importState.value == DataImportState.Importing
+        ) return
+
+        pendingImportRecords = emptyList()
+        _importState.value = DataImportState.Reading
+        val disposable = Observable.fromCallable {
+            val records = getContentResolver.openInputStream(uri)?.use { input ->
+                parseDailyBackup(input)
+            } ?: throw IllegalStateException("无法打开所选文件")
+
+            val existingKeys = AppDatabase.getInstance(getApplication())
+                .getDailyDAO()
+                .getAll()
+                .mapTo(mutableSetOf()) { it.toRecordKey() }
+            var duplicateCount = 0
+            records.forEach { record ->
+                if (!existingKeys.add(record.toRecordKey())) duplicateCount++
+            }
+            ImportInspection(records, duplicateCount)
+        }
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                { inspection ->
+                    pendingImportRecords = inspection.records
+                    _importState.value = DataImportState.Preview(
+                        inspection.records.size,
+                        inspection.duplicateCount
+                    )
+                },
+                { error ->
+                    pendingImportRecords = emptyList()
+                    _importState.value = DataImportState.Error(
+                        error.message ?: "读取备份文件失败"
+                    )
+                }
+            )
+        disposables.add(disposable)
+    }
+
+    fun importPendingData(mode: DataImportMode) {
+        if (_importState.value == DataImportState.Reading ||
+            _importState.value == DataImportState.Importing
+        ) return
+
+        val sourceRecords = pendingImportRecords
+        if (sourceRecords.isEmpty()) {
+            _importState.value = DataImportState.Error("没有待导入的数据，请重新选择备份文件")
+            return
+        }
+
+        _importState.value = DataImportState.Importing
+        val disposable = Observable.fromCallable {
+            val database = AppDatabase.getInstance(getApplication())
+            var importedCount = 0
+            var skippedCount = 0
+
+            database.runInTransaction {
+                val dailyDAO = database.getDailyDAO()
+                val statDAO = database.getStatDAO()
+
+                val recordsToInsert = when (mode) {
+                    DataImportMode.REPLACE -> {
+                        dailyDAO.deleteAll()
+                        sourceRecords.map { it.copyForImport(preserveId = true) }
+                    }
+                    DataImportMode.MERGE -> {
+                        val keys = dailyDAO.getAll()
+                            .mapTo(mutableSetOf()) { it.toRecordKey() }
+                        sourceRecords.mapNotNull { record ->
+                            if (keys.add(record.toRecordKey())) {
+                                record.copyForImport(preserveId = false)
+                            } else {
+                                skippedCount++
+                                null
+                            }
+                        }
+                    }
+                }
+
+                if (recordsToInsert.isNotEmpty()) {
+                    dailyDAO.addDailyList(recordsToInsert)
+                }
+                importedCount = recordsToInsert.size
+
+                val stats = createMonthStats(dailyDAO.getAll())
+                statDAO.deleteAll()
+                if (stats.isNotEmpty()) {
+                    statDAO.addStatList(stats)
+                }
+            }
+
+            DataImportState.Success(mode, importedCount, skippedCount)
+        }
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                { result ->
+                    pendingImportRecords = emptyList()
+                    _importState.value = result
+                },
+                { error ->
+                    pendingImportRecords = emptyList()
+                    _importState.value = DataImportState.Error(
+                        error.message ?: "写入数据库失败"
+                    )
+                }
+            )
+        disposables.add(disposable)
+    }
+
+    fun consumeImportState() {
+        _importState.value = DataImportState.Idle
+    }
+
+    fun cancelPendingImport() {
+        pendingImportRecords = emptyList()
+        _importState.value = DataImportState.Idle
     }
 
     /**
@@ -265,5 +417,11 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         disposables.clear()
+    }
+
+    private fun Daily.copyForImport(preserveId: Boolean): Daily {
+        return Daily(title, year, month, day, hour, time).also { copy ->
+            if (preserveId) copy.id = id
+        }
     }
 }

@@ -18,6 +18,15 @@ interface DailyDAO {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun addDaily(daily: Daily)
 
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun addDailyList(dailyList: List<Daily>)
+
+    @Query("SELECT * FROM daily ORDER BY time ASC")
+    fun getAll(): List<Daily>
+
+    @Query("DELETE FROM daily")
+    fun deleteAll()
+
     @Query("SELECT * FROM daily ORDER BY time DESC LIMIT :limit")
     fun getDailyDataSortByDESC(limit: Int = 9999999): List<Daily>
 

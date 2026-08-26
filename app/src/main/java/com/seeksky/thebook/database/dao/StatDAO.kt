@@ -17,4 +17,10 @@ interface StatDAO {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun addStat(stat: Stat)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    fun addStatList(stats: List<Stat>)
+
+    @Query("DELETE FROM stat_month")
+    fun deleteAll()
 }

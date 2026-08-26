@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.afollestad.materialdialogs.MaterialDialog
+import com.blankj.utilcode.util.ToastUtils
 import com.permissionx.guolindev.PermissionX
 import com.seeksky.thebook.R
 import com.seeksky.thebook.databinding.FragmentMineBinding
@@ -23,12 +24,14 @@ import java.util.*
 
 class MineFragment : Fragment() {
 
-    private val getDocument = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+    private val createExportDocument = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == Activity.RESULT_OK) {
-            it.data?.data.apply {
-                mineViewModel.exportDataToXls(this!!)
-            }
+            it.data?.data?.let(mineViewModel::exportDataToXls)
         }
+    }
+
+    private val openImportDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(mineViewModel::prepareDataImport)
     }
 
     private var _binding: FragmentMineBinding? = null
@@ -64,11 +67,62 @@ class MineFragment : Fragment() {
         }
         tvExportData.setOnClickListener {
             MaterialDialog(it.context).show {
-                val export_file_name = String.format("%s.xlsx", sdf.format(Calendar.getInstance().time))
+                val export_file_name = String.format("%s.xls", sdf.format(Calendar.getInstance().time))
                 val tip = String.format(getString(R.string.export_data_tip), export_file_name)
                 message(text = tip)
                 positiveButton { openSAFForSaveFile(export_file_name) }
                 negativeButton { dismiss() }
+            }
+        }
+
+        val tvImportData: TextView = binding.textMineImportData
+        tvImportData.setOnClickListener {
+            MaterialDialog(it.context).show {
+                message(R.string.import_data_tip)
+                positiveButton(R.string.btn_ok) { openSAFForImportFile() }
+                negativeButton { dismiss() }
+            }
+        }
+        mineViewModel.importState.observe(viewLifecycleOwner) { state ->
+            when (state) {
+                DataImportState.Idle -> {
+                    tvImportData.isEnabled = true
+                    tvImportData.text = getString(R.string.import_data)
+                }
+                DataImportState.Reading -> {
+                    tvImportData.isEnabled = false
+                    tvImportData.text = getString(R.string.import_data_reading)
+                }
+                DataImportState.Importing -> {
+                    tvImportData.isEnabled = false
+                    tvImportData.text = getString(R.string.import_data_writing)
+                }
+                is DataImportState.Preview -> {
+                    tvImportData.isEnabled = true
+                    tvImportData.text = getString(R.string.import_data)
+                    showImportPreview(state)
+                }
+                is DataImportState.Success -> {
+                    tvImportData.isEnabled = true
+                    tvImportData.text = getString(R.string.import_data)
+                    val message = if (state.mode == DataImportMode.MERGE) {
+                        getString(
+                            R.string.import_data_merge_success,
+                            state.importedCount,
+                            state.skippedCount
+                        )
+                    } else {
+                        getString(R.string.import_data_replace_success, state.importedCount)
+                    }
+                    ToastUtils.showLong(message)
+                    mineViewModel.consumeImportState()
+                }
+                is DataImportState.Error -> {
+                    tvImportData.isEnabled = true
+                    tvImportData.text = getString(R.string.import_data)
+                    ToastUtils.showLong(getString(R.string.import_data_failed, state.message))
+                    mineViewModel.consumeImportState()
+                }
             }
         }
 
@@ -122,15 +176,60 @@ class MineFragment : Fragment() {
 //            putExtra(DocumentsContract.EXTRA_INITIAL_URI, pickerInitialUri)
         }
 
-        getDocument.launch(intent)
+        createExportDocument.launch(intent)
     }
 
+    private fun openSAFForImportFile() {
+        openImportDocument.launch(
+            arrayOf(
+                "application/vnd.ms-excel",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/octet-stream"
+            )
+        )
+    }
+
+    private fun showImportPreview(preview: DataImportState.Preview) {
+        MaterialDialog(requireContext()).show {
+            title(R.string.import_data_preview_title)
+            message(
+                text = getString(
+                    R.string.import_data_preview_message,
+                    preview.recordCount,
+                    preview.duplicateCount
+                )
+            )
+            positiveButton(R.string.import_data_merge) {
+                mineViewModel.importPendingData(DataImportMode.MERGE)
+            }
+            neutralButton(R.string.import_data_replace) {
+                dismiss()
+                showReplaceConfirmation()
+            }
+            negativeButton {
+                mineViewModel.cancelPendingImport()
+                dismiss()
+            }
+        }
+    }
+
+    private fun showReplaceConfirmation() {
+        MaterialDialog(requireContext()).show {
+            title(R.string.import_data_replace_confirm_title)
+            message(R.string.import_data_replace_confirm_message)
+            positiveButton(R.string.import_data_replace) {
+                mineViewModel.importPendingData(DataImportMode.REPLACE)
+            }
+            negativeButton {
+                mineViewModel.cancelPendingImport()
+                dismiss()
+            }
+        }
+    }
 
 
     override fun onDestroyView() {
         super.onDestroyView()
-
-        getDocument.unregister()
         _binding = null
     }
 

@@ -2,9 +2,9 @@
 """Import TheBook's exported .xlsx file into its SQLite database.
 
 This version uses openpyxl and therefore requires a real Office Open XML
-workbook. The current Android exporter uses JXL and writes legacy BIFF .xls
-content, even when the selected filename ends with .xlsx. That Android export
-must be changed to an OOXML writer before it can be read by this script.
+workbook. The Android exporter uses JXL and writes legacy BIFF .xls content;
+historical exports may still have an .xlsx filename. Android-generated backups
+must be converted to OOXML before they can be read by this script.
 
 Install the only third-party dependency with:
 
@@ -80,7 +80,7 @@ def load_xlsx(path: Path) -> list[tuple[str, int, int, int, int, int]]:
     except Exception as exc:
         raise ValueError(
             f"Cannot read {path} as a real .xlsx file. "
-            "The current Android JXL export is legacy .xls content."
+            "The Android JXL export is legacy .xls content."
         ) from exc
 
     try:

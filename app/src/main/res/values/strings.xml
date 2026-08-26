@@ -18,6 +18,19 @@
     <string name="btn_no">否</string>
     <string name="export_data">数据导出</string>
     <string name="export_data_tip">请选择导出文件%s的存储位置</string>
+    <string name="import_data">数据导入</string>
+    <string name="import_data_tip">请选择由 TheBook 导出的备份文件。系统将先校验文件，确认后才会写入数据。</string>
+    <string name="import_data_reading">正在读取备份…</string>
+    <string name="import_data_writing">正在还原数据…</string>
+    <string name="import_data_preview_title">确认导入数据</string>
+    <string name="import_data_preview_message">备份包含 %1$d 条记录。合并导入预计跳过 %2$d 条重复记录。</string>
+    <string name="import_data_merge">合并导入</string>
+    <string name="import_data_replace">覆盖还原</string>
+    <string name="import_data_replace_confirm_title">确认覆盖当前数据</string>
+    <string name="import_data_replace_confirm_message">覆盖还原会先删除当前全部记录，再恢复所选备份。整个过程在一个事务中完成，失败时不会保留部分结果。</string>
+    <string name="import_data_merge_success">导入完成：新增 %1$d 条，跳过 %2$d 条重复记录</string>
+    <string name="import_data_replace_success">还原完成：已恢复 %1$d 条记录</string>
+    <string name="import_data_failed">数据导入失败：%1$s</string>
     <string name="file_tips">文件目录:</string>
     <string name="tip_permission_request">由于Android系统限制，需要手动开启文件管理权限功能，是否跳转开启，拒绝将退出App?</string>
 </resources>
