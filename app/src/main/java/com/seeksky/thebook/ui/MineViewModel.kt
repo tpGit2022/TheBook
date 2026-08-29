@@ -11,7 +11,9 @@ import androidx.lifecycle.MutableLiveData
 import com.blankj.utilcode.util.SDCardUtils
 import com.blankj.utilcode.util.ToastUtils
 import com.seeksky.thebook.App
-import com.seeksky.thebook.database.AppDatabase
+import com.seeksky.thebook.backup.DatabaseBackupExporter
+import com.seeksky.thebook.backup.DatabaseBackupProgress
+import com.seeksky.thebook.database.DatabaseProvider
 import com.seeksky.thebook.database.entry.Daily
 import com.seeksky.thebook.tool.applySchedulers
 import com.seeksky.thebook.tool.createMonthStats
@@ -60,6 +62,14 @@ sealed class DataImportState {
     data class Error(val message: String) : DataImportState()
 }
 
+sealed class DatabaseBackupState {
+    object Idle : DatabaseBackupState()
+    object PreparingSnapshot : DatabaseBackupState()
+    object WritingArchive : DatabaseBackupState()
+    data class Success(val fileCount: Int, val totalBytes: Long) : DatabaseBackupState()
+    data class Error(val message: String) : DatabaseBackupState()
+}
+
 private data class ImportInspection(
     val records: List<Daily>,
     val duplicateCount: Int
@@ -71,13 +81,16 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private val _exportText = MutableLiveData<String>().apply {
-        value = "数据导出"
+        value = "记录导出（XLS）"
     }
     val exportText: LiveData<String> = _exportText
 
     private val _importState = MutableLiveData<DataImportState>(DataImportState.Idle)
     val importState: LiveData<DataImportState> = _importState
     private var pendingImportRecords: List<Daily> = emptyList()
+
+    private val _databaseBackupState = MutableLiveData<DatabaseBackupState>(DatabaseBackupState.Idle)
+    val databaseBackupState: LiveData<DatabaseBackupState> = _databaseBackupState
 
     private val _mTextDirInfo: MutableLiveData<String> = MutableLiveData()
     val dirText: LiveData<String> get() = _mTextDirInfo
@@ -227,9 +240,11 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
         return false
     }
     fun exportDataToXls(uri: Uri) {
+        if (isDatabaseBackupRunning()) return
         Observable.create<List<Daily>>{
-            val dao = AppDatabase.getInstance(getApplication()).getDailyDAO()
-            val list = dao.getDailyDataSortByDESC()
+            val list = DatabaseProvider.withDatabase(getApplication()) { database ->
+                database.getDailyDAO().getDailyDataSortByDESC()
+            }
             it.onNext(list)
             it.onComplete()
         }.compose(applySchedulers()).subscribe(object:
@@ -258,7 +273,8 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
 
     fun prepareDataImport(uri: Uri) {
         if (_importState.value == DataImportState.Reading ||
-            _importState.value == DataImportState.Importing
+            _importState.value == DataImportState.Importing ||
+            isDatabaseBackupRunning()
         ) return
 
         pendingImportRecords = emptyList()
@@ -268,9 +284,10 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
                 parseDailyBackup(input)
             } ?: throw IllegalStateException("无法打开所选文件")
 
-            val existingKeys = AppDatabase.getInstance(getApplication())
-                .getDailyDAO()
-                .getAll()
+            val existingRecords = DatabaseProvider.withDatabase(getApplication()) { database ->
+                database.getDailyDAO().getAll()
+            }
+            val existingKeys = existingRecords
                 .mapTo(mutableSetOf()) { it.toRecordKey() }
             var duplicateCount = 0
             records.forEach { record ->
@@ -300,7 +317,8 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
 
     fun importPendingData(mode: DataImportMode) {
         if (_importState.value == DataImportState.Reading ||
-            _importState.value == DataImportState.Importing
+            _importState.value == DataImportState.Importing ||
+            isDatabaseBackupRunning()
         ) return
 
         val sourceRecords = pendingImportRecords
@@ -311,42 +329,43 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
 
         _importState.value = DataImportState.Importing
         val disposable = Observable.fromCallable {
-            val database = AppDatabase.getInstance(getApplication())
             var importedCount = 0
             var skippedCount = 0
 
-            database.runInTransaction {
-                val dailyDAO = database.getDailyDAO()
-                val statDAO = database.getStatDAO()
+            DatabaseProvider.withDatabase(getApplication()) { database ->
+                database.runInTransaction {
+                    val dailyDAO = database.getDailyDAO()
+                    val statDAO = database.getStatDAO()
 
-                val recordsToInsert = when (mode) {
-                    DataImportMode.REPLACE -> {
-                        dailyDAO.deleteAll()
-                        sourceRecords.map { it.copyForImport(preserveId = true) }
-                    }
-                    DataImportMode.MERGE -> {
-                        val keys = dailyDAO.getAll()
-                            .mapTo(mutableSetOf()) { it.toRecordKey() }
-                        sourceRecords.mapNotNull { record ->
-                            if (keys.add(record.toRecordKey())) {
-                                record.copyForImport(preserveId = false)
-                            } else {
-                                skippedCount++
-                                null
+                    val recordsToInsert = when (mode) {
+                        DataImportMode.REPLACE -> {
+                            dailyDAO.deleteAll()
+                            sourceRecords.map { it.copyForImport(preserveId = true) }
+                        }
+                        DataImportMode.MERGE -> {
+                            val keys = dailyDAO.getAll()
+                                .mapTo(mutableSetOf()) { it.toRecordKey() }
+                            sourceRecords.mapNotNull { record ->
+                                if (keys.add(record.toRecordKey())) {
+                                    record.copyForImport(preserveId = false)
+                                } else {
+                                    skippedCount++
+                                    null
+                                }
                             }
                         }
                     }
-                }
 
-                if (recordsToInsert.isNotEmpty()) {
-                    dailyDAO.addDailyList(recordsToInsert)
-                }
-                importedCount = recordsToInsert.size
+                    if (recordsToInsert.isNotEmpty()) {
+                        dailyDAO.addDailyList(recordsToInsert)
+                    }
+                    importedCount = recordsToInsert.size
 
-                val stats = createMonthStats(dailyDAO.getAll())
-                statDAO.deleteAll()
-                if (stats.isNotEmpty()) {
-                    statDAO.addStatList(stats)
+                    val stats = createMonthStats(dailyDAO.getAll())
+                    statDAO.deleteAll()
+                    if (stats.isNotEmpty()) {
+                        statDAO.addStatList(stats)
+                    }
                 }
             }
 
@@ -367,6 +386,50 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
                 }
             )
         disposables.add(disposable)
+    }
+
+    fun backupDatabase(uri: Uri) {
+        if (isDatabaseBackupRunning() ||
+            _importState.value == DataImportState.Reading ||
+            _importState.value == DataImportState.Importing
+        ) return
+
+        _databaseBackupState.value = DatabaseBackupState.PreparingSnapshot
+        val disposable = Observable.fromCallable {
+            DatabaseBackupExporter.export(getApplication(), uri) { progress ->
+                val state = when (progress) {
+                    DatabaseBackupProgress.PREPARING_SNAPSHOT ->
+                        DatabaseBackupState.PreparingSnapshot
+                    DatabaseBackupProgress.WRITING_ARCHIVE ->
+                        DatabaseBackupState.WritingArchive
+                }
+                _databaseBackupState.postValue(state)
+            }
+        }
+            .subscribeOn(Schedulers.io())
+            .subscribe(
+                { result ->
+                    _databaseBackupState.postValue(DatabaseBackupState.Success(
+                        result.fileCount,
+                        result.totalBytes
+                    ))
+                },
+                { error ->
+                    _databaseBackupState.postValue(DatabaseBackupState.Error(
+                        error.message ?: "未知错误"
+                    ))
+                }
+            )
+        disposables.add(disposable)
+    }
+
+    fun consumeDatabaseBackupState() {
+        _databaseBackupState.value = DatabaseBackupState.Idle
+    }
+
+    private fun isDatabaseBackupRunning(): Boolean {
+        return _databaseBackupState.value == DatabaseBackupState.PreparingSnapshot ||
+            _databaseBackupState.value == DatabaseBackupState.WritingArchive
     }
 
     fun consumeImportState() {

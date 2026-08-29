@@ -19,7 +19,7 @@ import com.github.mikephil.charting.formatter.IValueFormatter
 import com.github.mikephil.charting.highlight.Highlight
 import com.seeksky.thebook.R
 import com.seeksky.thebook.data.DailyGap
-import com.seeksky.thebook.database.AppDatabase
+import com.seeksky.thebook.database.DatabaseProvider
 import com.seeksky.thebook.database.entry.Daily
 import com.seeksky.thebook.database.entry.Stat
 import com.seeksky.thebook.databinding.FragmentStatisticBinding
@@ -144,8 +144,9 @@ class StatisticsFragment : Fragment() {
 //        val delay = if (SPUtils.getInstance().getBoolean(Constants.KEY_DATA_MIGRATE)) 0 else 1000
         val delay = 0
         Observable.create<MutableList<Stat>> {
-            val dao = AppDatabase.getInstance(requireActivity().applicationContext).getStatDAO()
-            val list = dao.getStatDataSortByAsc(999999)
+            val list = DatabaseProvider.withDatabase(requireActivity().applicationContext) { database ->
+                database.getStatDAO().getStatDataSortByAsc(999999)
+            }
             it.onNext(list.toMutableList())
             it.onComplete()
         }.delay(delay.toLong(), TimeUnit.MILLISECONDS).compose(applySchedulers())
@@ -437,8 +438,9 @@ class StatisticsFragment : Fragment() {
     private fun loadGapData() {
         val delay = 0
         Observable.create<MutableList<DailyGap>> {
-            val dao = AppDatabase.getInstance(requireActivity().applicationContext).getDailyDAO()
-            val list = dao.getRecent(40)
+            val list = DatabaseProvider.withDatabase(requireActivity().applicationContext) { database ->
+                database.getDailyDAO().getRecent(40)
+            }
             val t = list.sortedBy { it.time }.toMutableList()
             var gapDataSource = mutableListOf<DailyGap>()
             val calendar = Calendar.getInstance()

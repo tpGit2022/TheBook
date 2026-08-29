@@ -6,7 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.blankj.utilcode.util.ToastUtils
-import com.seeksky.thebook.database.AppDatabase
+import com.seeksky.thebook.database.DatabaseProvider
 import com.seeksky.thebook.database.entry.Daily
 import com.seeksky.thebook.database.entry.Stat
 import com.seeksky.thebook.tool.applySchedulers
@@ -38,29 +38,32 @@ class AddViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun addDaily(daily: Daily, context: Context) {
         Observable.create<Daily> {
-            val dailyDao = AppDatabase.getInstance(context).getDailyDAO()
-            dailyDao.addDaily(daily)
-            val statDAO = AppDatabase.getInstance(context).getStatDAO()
+            DatabaseProvider.withDatabase(context) { database ->
+                database.runInTransaction {
+                    val dailyDao = database.getDailyDAO()
+                    val statDAO = database.getStatDAO()
+                    dailyDao.addDaily(daily)
 
-            val st = Stat(
-                daily.year,
-                daily.month,
-                1,
-                String.format("%04d%02d", daily.year, daily.month)
-            )
-            val statList = statDAO.getStatDataSortByAsc(99999,)
-            if (statList.isEmpty()) {
-                statDAO.addStat(st)
-            } else {
-                val lastStat: Stat = statList[statList.size - 1]
-                if (lastStat.year == st.year && lastStat.month == st.month) {
-                    lastStat.times = lastStat.times + 1
-                    statDAO.addStat(lastStat)
-                } else {
-                    statDAO.addStat(st)
+                    val st = Stat(
+                        daily.year,
+                        daily.month,
+                        1,
+                        String.format("%04d%02d", daily.year, daily.month)
+                    )
+                    val statList = statDAO.getStatDataSortByAsc(99999)
+                    if (statList.isEmpty()) {
+                        statDAO.addStat(st)
+                    } else {
+                        val lastStat: Stat = statList[statList.size - 1]
+                        if (lastStat.year == st.year && lastStat.month == st.month) {
+                            lastStat.times = lastStat.times + 1
+                            statDAO.addStat(lastStat)
+                        } else {
+                            statDAO.addStat(st)
+                        }
+                    }
                 }
             }
-
             it.onNext(daily)
             it.onComplete()
         }.compose(applySchedulers()).subscribe(object : Observer<Daily> {

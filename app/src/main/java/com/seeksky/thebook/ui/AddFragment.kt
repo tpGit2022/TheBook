@@ -16,7 +16,7 @@ import com.chad.library.adapter.base.BaseQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
 import com.seeksky.thebook.R
 import com.seeksky.thebook.adapter.RecentRecordAdapter
-import com.seeksky.thebook.database.AppDatabase
+import com.seeksky.thebook.database.DatabaseProvider
 import com.seeksky.thebook.database.entry.Daily
 import com.seeksky.thebook.databinding.FragmentAddBinding
 import com.seeksky.thebook.tool.applySchedulers
@@ -64,6 +64,7 @@ class AddFragment : Fragment() {
         binding.rv.addItemDecoration(DividerItemDecoration(context, DividerItemDecoration.VERTICAL))
         queryDailyData(mData)
         adapter.setOnItemChildLongClickListener { _, view: View, position ->
+            val applicationContext = view.context.applicationContext
             MaterialDialog(view.context).show {
                 message(text = "你确定要删除该条数据吗?")
                 positiveButton {
@@ -71,7 +72,9 @@ class AddFragment : Fragment() {
                     if (position >= 0 && position < mData.size) {
                         Observable.create<Daily> {
                             val daily = mData[position]
-                            AppDatabase.getInstance(context).getDailyDAO().delete(daily)
+                            DatabaseProvider.withDatabase(applicationContext) { database ->
+                                database.getDailyDAO().delete(daily)
+                            }
                             it.onNext(daily)
                             it.onComplete()
                         }.compose(applySchedulers()).subscribe(object :
@@ -149,10 +152,14 @@ class AddFragment : Fragment() {
 //        val delay = if (SPUtils.getInstance(Constants.XML_FILE_NAME).getBoolean(Constants.KEY_DATA_MIGRATE)) 0 else 1000
         val delay = 0
         Observable.create<List<Daily>> {
-            val dao = context?.let { it1 -> AppDatabase.getInstance(it1.applicationContext).getDailyDAO() }
             val list = mutableListOf<Daily>()
-            dao?.let { it1 -> list.addAll(it1.getRecent(90)) }
-            dao?.let { it1 -> list.addAll(it1.getRecentAction()) }
+            context?.let { currentContext ->
+                DatabaseProvider.withDatabase(currentContext) { database ->
+                    val dao = database.getDailyDAO()
+                    list.addAll(dao.getRecent(90))
+                    list.addAll(dao.getRecentAction())
+                }
+            }
             it.onNext(list.toList())
             it.onComplete()
         }.delay(delay.toLong(), TimeUnit.MILLISECONDS).compose(applySchedulers())
@@ -182,10 +189,13 @@ class AddFragment : Fragment() {
 //        val delay = if (SPUtils.getInstance(Constants.XML_FILE_NAME).getBoolean(Constants.KEY_DATA_MIGRATE)) 0 else 1000
         val delay = 0
         Observable.create<String> { it ->
-            val dao = context?.let { it1 -> AppDatabase.getInstance(it1.applicationContext).getDailyDAO() }
             val list = mutableListOf<Daily>()
             val dailyMap = mutableMapOf<Long, String>()
-            dao?.let { it1 -> list.addAll(it1.getRecent(999999)) }
+            context?.let { currentContext ->
+                DatabaseProvider.withDatabase(currentContext) { database ->
+                    list.addAll(database.getDailyDAO().getRecent(999999))
+                }
+            }
             val size = list.size
             var max = 0L
             for (i in size - 1 downTo 1) {

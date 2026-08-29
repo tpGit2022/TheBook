@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.text.format.Formatter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -32,6 +33,12 @@ class MineFragment : Fragment() {
 
     private val openImportDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(mineViewModel::prepareDataImport)
+    }
+
+    private val createDatabaseBackupDocument = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        uri?.let(mineViewModel::backupDatabase)
     }
 
     private var _binding: FragmentMineBinding? = null
@@ -88,23 +95,28 @@ class MineFragment : Fragment() {
                 DataImportState.Idle -> {
                     tvImportData.isEnabled = true
                     tvImportData.text = getString(R.string.import_data)
+                    updateDatabaseOperationAvailability()
                 }
                 DataImportState.Reading -> {
                     tvImportData.isEnabled = false
                     tvImportData.text = getString(R.string.import_data_reading)
+                    updateDatabaseOperationAvailability()
                 }
                 DataImportState.Importing -> {
                     tvImportData.isEnabled = false
                     tvImportData.text = getString(R.string.import_data_writing)
+                    updateDatabaseOperationAvailability()
                 }
                 is DataImportState.Preview -> {
                     tvImportData.isEnabled = true
                     tvImportData.text = getString(R.string.import_data)
+                    updateDatabaseOperationAvailability()
                     showImportPreview(state)
                 }
                 is DataImportState.Success -> {
                     tvImportData.isEnabled = true
                     tvImportData.text = getString(R.string.import_data)
+                    updateDatabaseOperationAvailability()
                     val message = if (state.mode == DataImportMode.MERGE) {
                         getString(
                             R.string.import_data_merge_success,
@@ -120,10 +132,54 @@ class MineFragment : Fragment() {
                 is DataImportState.Error -> {
                     tvImportData.isEnabled = true
                     tvImportData.text = getString(R.string.import_data)
+                    updateDatabaseOperationAvailability()
                     ToastUtils.showLong(getString(R.string.import_data_failed, state.message))
                     mineViewModel.consumeImportState()
                 }
             }
+        }
+
+        binding.textMineBackupDatabase.setOnClickListener {
+            MaterialDialog(it.context).show {
+                title(R.string.database_backup_title)
+                message(R.string.database_backup_tip)
+                positiveButton(R.string.btn_ok) { openSAFForDatabaseBackup() }
+                negativeButton { dismiss() }
+            }
+        }
+        mineViewModel.databaseBackupState.observe(viewLifecycleOwner) { state ->
+            when (state) {
+                DatabaseBackupState.Idle -> {
+                    binding.textMineBackupDatabase.text = getString(R.string.database_backup)
+                }
+                DatabaseBackupState.PreparingSnapshot -> {
+                    binding.textMineBackupDatabase.text =
+                        getString(R.string.database_backup_preparing)
+                }
+                DatabaseBackupState.WritingArchive -> {
+                    binding.textMineBackupDatabase.text =
+                        getString(R.string.database_backup_writing)
+                }
+                is DatabaseBackupState.Success -> {
+                    binding.textMineBackupDatabase.text = getString(R.string.database_backup)
+                    ToastUtils.showLong(
+                        getString(
+                            R.string.database_backup_success,
+                            state.fileCount,
+                            Formatter.formatFileSize(requireContext(), state.totalBytes)
+                        )
+                    )
+                    mineViewModel.consumeDatabaseBackupState()
+                }
+                is DatabaseBackupState.Error -> {
+                    binding.textMineBackupDatabase.text = getString(R.string.database_backup)
+                    ToastUtils.showLong(
+                        getString(R.string.database_backup_failed, state.message)
+                    )
+                    mineViewModel.consumeDatabaseBackupState()
+                }
+            }
+            updateDatabaseOperationAvailability()
         }
 
         val tvProcess = binding!!.textProcess
@@ -187,6 +243,27 @@ class MineFragment : Fragment() {
                 "application/octet-stream"
             )
         )
+    }
+
+    private fun openSAFForDatabaseBackup() {
+        val fileName = String.format(
+            "AppBackup_%s.zip",
+            sdf.format(Calendar.getInstance().time)
+        )
+        createDatabaseBackupDocument.launch(fileName)
+    }
+
+    private fun updateDatabaseOperationAvailability() {
+        if (_binding == null) return
+        val importRunning = mineViewModel.importState.value == DataImportState.Reading ||
+            mineViewModel.importState.value == DataImportState.Importing
+        val backupRunning =
+            mineViewModel.databaseBackupState.value == DatabaseBackupState.PreparingSnapshot ||
+                mineViewModel.databaseBackupState.value == DatabaseBackupState.WritingArchive
+        val enabled = !importRunning && !backupRunning
+        binding.textMineExportData.isEnabled = enabled
+        binding.textMineImportData.isEnabled = enabled
+        binding.textMineBackupDatabase.isEnabled = enabled
     }
 
     private fun showImportPreview(preview: DataImportState.Preview) {

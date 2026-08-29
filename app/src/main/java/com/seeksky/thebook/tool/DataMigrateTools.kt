@@ -6,7 +6,7 @@ import com.blankj.utilcode.util.SPUtils
 import com.blankj.utilcode.util.ToastUtils
 import com.seeksky.thebook.Constants
 import com.seeksky.thebook.R
-import com.seeksky.thebook.database.AppDatabase
+import com.seeksky.thebook.database.DatabaseProvider
 import com.seeksky.thebook.database.entry.Daily
 import com.seeksky.thebook.database.entry.Stat
 import io.reactivex.Observable
@@ -25,14 +25,21 @@ fun startMigrateData(context: Context, input: InputStream, writeDB: Boolean, nee
         val sortList = loadXlsData(input)
         e.onNext(sortList)
         e.onComplete()
-    }.delay(200, TimeUnit.MILLISECONDS).map{ if (needUnique) makeDataUnique(it) else it }.map { if (writeDB) writeDB(context, it); it }.
-    map { covertData(it) }.map { if (writeDB) writeDBMonthStat(context, it); it }.compose(
+    }.delay(200, TimeUnit.MILLISECONDS).map { if (needUnique) makeDataUnique(it) else it }
+        .map { dailyList ->
+            val stats = covertData(dailyList)
+            if (writeDB) writeMigratedData(context, dailyList, stats)
+            stats
+        }.compose(
         applySchedulers()
     )
         .subscribe(object : Observer<MutableList<Stat>> {
             override fun onSubscribe(d: Disposable) {}
             override fun onNext(t: MutableList<Stat>) {
-                SPUtils.getInstance(Constants.XML_FILE_NAME).put(Constants.KEY_DATA_MIGRATE, true)
+                if (writeDB) {
+                    SPUtils.getInstance(Constants.XML_FILE_NAME)
+                        .put(Constants.KEY_DATA_MIGRATE, true)
+                }
             }
 
             override fun onError(e: Throwable) {
@@ -146,20 +153,26 @@ fun covertData(dailyList: MutableList<Daily>): MutableList<Stat> {
     }
 }
 
-fun writeDB(context: Context, dailyList: MutableList<Daily>) {
-    val dao = AppDatabase.getInstance(context.applicationContext).getDailyDAO()
-    for (i in dailyList) dao.addDaily(i)
-}
-
-fun writeDBMonthStat(context: Context, stats: MutableList<Stat>) {
-    val dao = AppDatabase.getInstance(context.applicationContext).getStatDAO()
-    for (i in stats) dao.addStat(i)
+private fun writeMigratedData(
+    context: Context,
+    dailyList: MutableList<Daily>,
+    stats: MutableList<Stat>
+) {
+    DatabaseProvider.withDatabase(context.applicationContext) { database ->
+        database.runInTransaction {
+            val dailyDao = database.getDailyDAO()
+            val statDao = database.getStatDAO()
+            dailyList.forEach(dailyDao::addDaily)
+            stats.forEach(statDao::addStat)
+        }
+    }
 }
 
 fun exportXls(context: Context, path: String, fileName: String) {
     Observable.create<List<Daily>>{
-        val dao = AppDatabase.getInstance(context).getDailyDAO()
-        val list = dao.getDailyDataSortByDESC()
+        val list = DatabaseProvider.withDatabase(context) { database ->
+            database.getDailyDAO().getDailyDataSortByDESC()
+        }
         it.onNext(list)
         it.onComplete()
     }.map { writeXls(path, fileName, it) }.compose(applySchedulers()).subscribe(object: Observer<List<Daily>>{
@@ -221,4 +234,3 @@ fun writeXls(path: String, fileName: String, list: List<Daily>): List<Daily> {
     }
     return list
 }
-
