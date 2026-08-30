@@ -40,4 +40,33 @@
     <string name="database_backup_failed">数据库备份失败：%1$s</string>
     <string name="file_tips">文件目录:</string>
     <string name="tip_permission_request">由于Android系统限制，需要手动开启文件管理权限功能，是否跳转开启，拒绝将退出App?</string>
+
+    <string name="pomodoro_title">番茄钟</string>
+    <string name="pomodoro_status_idle">准备专注</string>
+    <string name="pomodoro_status_running">专注中</string>
+    <string name="pomodoro_status_paused">已暂停</string>
+    <string name="pomodoro_status_finished">本次专注已完成</string>
+    <string name="pomodoro_duration_15">15 分钟</string>
+    <string name="pomodoro_duration_25">25 分钟</string>
+    <string name="pomodoro_duration_45">45 分钟</string>
+    <string name="pomodoro_start">开始</string>
+    <string name="pomodoro_pause">暂停</string>
+    <string name="pomodoro_resume">继续</string>
+    <string name="pomodoro_restart">再来一个</string>
+    <string name="pomodoro_end">结束</string>
+    <string name="pomodoro_end_confirm_title">结束本次番茄钟？</string>
+    <string name="pomodoro_end_confirm_message">当前计时进度不会保留。</string>
+    <string name="pomodoro_notification_required_title">需要开启通知</string>
+    <string name="pomodoro_notification_required_message">番茄钟依赖常驻通知在后台运行，请先在系统设置中允许通知。</string>
+    <string name="pomodoro_open_settings">打开设置</string>
+    <string name="pomodoro_channel_running">番茄钟运行中</string>
+    <string name="pomodoro_channel_running_description">显示正在运行或暂停的番茄钟</string>
+    <string name="pomodoro_channel_alerts">番茄钟完成提醒</string>
+    <string name="pomodoro_channel_alerts_description">番茄钟结束时播放声音并振动</string>
+    <string name="pomodoro_notification_running">番茄钟 · 专注中</string>
+    <string name="pomodoro_notification_paused">番茄钟 · 已暂停</string>
+    <string name="pomodoro_notification_remaining">剩余 %1$s</string>
+    <string name="pomodoro_notification_chronometer_format" formatted="false">剩余 %s</string>
+    <string name="pomodoro_complete_title">番茄钟完成</string>
+    <string name="pomodoro_complete_message">辛苦了，起来休息一下吧。</string>
 </resources>

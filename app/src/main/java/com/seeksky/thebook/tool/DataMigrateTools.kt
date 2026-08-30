@@ -1,11 +1,9 @@
 package com.seeksky.thebook.tool
 
 import android.content.Context
-import android.content.res.Resources
 import com.blankj.utilcode.util.SPUtils
 import com.blankj.utilcode.util.ToastUtils
 import com.seeksky.thebook.Constants
-import com.seeksky.thebook.R
 import com.seeksky.thebook.database.DatabaseProvider
 import com.seeksky.thebook.database.entry.Daily
 import com.seeksky.thebook.database.entry.Stat
@@ -50,11 +48,6 @@ fun startMigrateData(context: Context, input: InputStream, writeDB: Boolean, nee
                 println("onComplete")
             }
         })
-}
-
-fun startMigrateData(context: Context, resources: Resources) {
-    val input = resources.openRawResource(R.raw.old_data)
-    startMigrateData(context, input, writeDB = true, needUnique = false)
 }
 
 fun startMigrateData(context: Context, input: InputStream) {
@@ -120,11 +113,6 @@ fun loadXlsData(input: InputStream): MutableList<Daily> {
         it.sortWith(Comparator { o1: Daily, o2: Daily -> (o1.time.compareTo(o2.time)) })
         it
     }
-}
-
-fun loadXlsData(resources: Resources): MutableList<Daily> {
-    val input = resources.openRawResource(R.raw.old_data)
-    return loadXlsData(input)
 }
 
 fun covertData(dailyList: MutableList<Daily>): MutableList<Stat> {

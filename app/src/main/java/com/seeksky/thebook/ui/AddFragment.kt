@@ -1,7 +1,13 @@
 package com.seeksky.thebook.ui
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +25,8 @@ import com.seeksky.thebook.adapter.RecentRecordAdapter
 import com.seeksky.thebook.database.DatabaseProvider
 import com.seeksky.thebook.database.entry.Daily
 import com.seeksky.thebook.databinding.FragmentAddBinding
+import com.seeksky.thebook.pomodoro.PomodoroPhase
+import com.seeksky.thebook.pomodoro.PomodoroState
 import com.seeksky.thebook.tool.applySchedulers
 import io.reactivex.Observable
 import io.reactivex.Observer
@@ -26,11 +34,21 @@ import io.reactivex.disposables.Disposable
 import java.lang.StringBuilder
 import java.util.*
 import java.util.concurrent.TimeUnit
+import kotlin.math.ceil
 
 class AddFragment : Fragment() {
 
     private var _binding: FragmentAddBinding? = null
     private lateinit var  adapter: BaseQuickAdapter<Daily, BaseViewHolder>
+    private lateinit var pomodoroViewModel: PomodoroViewModel
+    private val pomodoroHandler = Handler(Looper.getMainLooper())
+    private var selectedPomodoroMinutes = 25
+    private val pomodoroTicker = object : Runnable {
+        override fun run() {
+            val state = pomodoroViewModel.state.value ?: return
+            renderPomodoro(state)
+        }
+    }
 
     // This property is only valid between onCreateView and
     // onDestroyView.
@@ -47,6 +65,10 @@ class AddFragment : Fragment() {
             this,
             ViewModelProvider.AndroidViewModelFactory.getInstance(requireActivity().application)
         )[AddViewModel::class.java]
+        pomodoroViewModel = ViewModelProvider(
+            this,
+            ViewModelProvider.AndroidViewModelFactory.getInstance(requireActivity().application)
+        )[PomodoroViewModel::class.java]
         _binding = FragmentAddBinding.inflate(inflater, container, false)
 
         val root: View = binding.root
@@ -57,6 +79,7 @@ class AddFragment : Fragment() {
         addViewModel.text.observe(viewLifecycleOwner) {
 //            addViewModel.addDailyData("zero")
         }
+        setupPomodoro()
 
         adapter = RecentRecordAdapter(R.layout.item_recent_record, mData)
         binding.rv.adapter = adapter
@@ -143,8 +166,145 @@ class AddFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        pomodoroHandler.removeCallbacks(pomodoroTicker)
         super.onDestroyView()
         _binding = null
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::pomodoroViewModel.isInitialized) {
+            pomodoroViewModel.refresh()
+        }
+    }
+
+    private fun setupPomodoro() {
+        binding.togglePomodoroDuration.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            selectedPomodoroMinutes = when (checkedId) {
+                R.id.button_duration_15 -> 15
+                R.id.button_duration_45 -> 45
+                else -> 25
+            }
+        }
+
+        binding.buttonPomodoroPrimary.setOnClickListener {
+            when (pomodoroViewModel.state.value?.phase ?: PomodoroPhase.IDLE) {
+                PomodoroPhase.IDLE,
+                PomodoroPhase.FINISHED -> {
+                    if (pomodoroViewModel.notificationsEnabled()) {
+                        pomodoroViewModel.start(selectedPomodoroMinutes)
+                    } else {
+                        showNotificationSettingsDialog()
+                    }
+                }
+
+                PomodoroPhase.RUNNING -> pomodoroViewModel.pause()
+                PomodoroPhase.PAUSED -> pomodoroViewModel.resume()
+            }
+        }
+
+        binding.buttonPomodoroEnd.setOnClickListener {
+            MaterialDialog(requireContext()).show {
+                title(R.string.pomodoro_end_confirm_title)
+                message(R.string.pomodoro_end_confirm_message)
+                negativeButton(R.string.btn_no)
+                positiveButton(R.string.btn_yes) {
+                    pomodoroViewModel.cancel()
+                }
+            }
+        }
+
+        pomodoroViewModel.state.observe(viewLifecycleOwner) { state ->
+            renderPomodoro(state)
+        }
+    }
+
+    private fun renderPomodoro(state: PomodoroState) {
+        if (_binding == null) return
+        pomodoroHandler.removeCallbacks(pomodoroTicker)
+
+        val remaining = pomodoroViewModel.remainingMillis(state)
+        binding.textPomodoroTime.text = formatPomodoroTime(remaining)
+        binding.textPomodoroStatus.setText(
+            when (state.phase) {
+                PomodoroPhase.IDLE -> R.string.pomodoro_status_idle
+                PomodoroPhase.RUNNING -> R.string.pomodoro_status_running
+                PomodoroPhase.PAUSED -> R.string.pomodoro_status_paused
+                PomodoroPhase.FINISHED -> R.string.pomodoro_status_finished
+            }
+        )
+        binding.buttonPomodoroPrimary.setText(
+            when (state.phase) {
+                PomodoroPhase.IDLE -> R.string.pomodoro_start
+                PomodoroPhase.RUNNING -> R.string.pomodoro_pause
+                PomodoroPhase.PAUSED -> R.string.pomodoro_resume
+                PomodoroPhase.FINISHED -> R.string.pomodoro_restart
+            }
+        )
+
+        val isActive = state.isActive
+        binding.buttonPomodoroEnd.visibility = if (isActive) View.VISIBLE else View.GONE
+        setDurationButtonsEnabled(!isActive)
+
+        if (!isActive) {
+            selectedPomodoroMinutes = (state.durationMillis / 60_000L).toInt()
+            val checkedButton = when (selectedPomodoroMinutes) {
+                15 -> R.id.button_duration_15
+                45 -> R.id.button_duration_45
+                else -> R.id.button_duration_25
+            }
+            if (binding.togglePomodoroDuration.checkedButtonId != checkedButton) {
+                binding.togglePomodoroDuration.check(checkedButton)
+            }
+        }
+
+        if (state.phase == PomodoroPhase.RUNNING) {
+            if (remaining <= 0L) {
+                pomodoroViewModel.completeIfExpired()
+            } else {
+                val remainder = remaining % 1_000L
+                val delay = if (remainder == 0L) 1_000L else remainder
+                pomodoroHandler.postDelayed(pomodoroTicker, delay.coerceAtLeast(100L))
+            }
+        }
+    }
+
+    private fun setDurationButtonsEnabled(enabled: Boolean) {
+        binding.buttonDuration15.isEnabled = enabled
+        binding.buttonDuration25.isEnabled = enabled
+        binding.buttonDuration45.isEnabled = enabled
+    }
+
+    private fun formatPomodoroTime(remainingMillis: Long): String {
+        val totalSeconds = ceil(remainingMillis / 1_000.0).toLong().coerceAtLeast(0L)
+        return String.format(
+            Locale.getDefault(),
+            "%02d:%02d",
+            totalSeconds / 60L,
+            totalSeconds % 60L
+        )
+    }
+
+    private fun showNotificationSettingsDialog() {
+        MaterialDialog(requireContext()).show {
+            title(R.string.pomodoro_notification_required_title)
+            message(R.string.pomodoro_notification_required_message)
+            negativeButton(R.string.btn_no)
+            positiveButton(R.string.pomodoro_open_settings) {
+                val settingsIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                        putExtra(Settings.EXTRA_APP_PACKAGE, requireContext().packageName)
+                    }
+                } else {
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:${requireContext().packageName}")
+                    )
+                }
+                startActivity(settingsIntent)
+            }
+        }
     }
 
 

@@ -4,7 +4,8 @@ import android.app.Application
 import android.os.StrictMode
 import androidx.appcompat.app.AppCompatDelegate
 import com.blankj.utilcode.util.SPUtils
-import com.seeksky.thebook.tool.startMigrateData
+import com.seeksky.thebook.pomodoro.PomodoroNotification
+import com.seeksky.thebook.pomodoro.PomodoroStateRepository
 
 class App: Application() {
 
@@ -16,6 +17,8 @@ class App: Application() {
     override fun onCreate() {
         initDebug(false)
         super.onCreate()
+        PomodoroNotification.createChannels(this)
+        PomodoroStateRepository.initialize(this)
         migrateData()
     }
 
@@ -36,7 +39,9 @@ class App: Application() {
     private fun migrateData() {
         val isMigrate = SPUtils.getInstance(Constants.XML_FILE_NAME).getBoolean(Constants.KEY_DATA_MIGRATE, false)
         if (!isMigrate) {
-            startMigrateData(applicationContext, resources)
+            // The private legacy old_data.xls resource is no longer bundled with the app.
+            SPUtils.getInstance(Constants.XML_FILE_NAME)
+                .put(Constants.KEY_DATA_MIGRATE, true)
         }
     }
 }
