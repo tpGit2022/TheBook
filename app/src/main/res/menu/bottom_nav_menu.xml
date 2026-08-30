@@ -15,4 +15,9 @@
         android:icon="@drawable/ic_baseline_group_24"
         android:title="@string/title_mine" />
 
+    <item
+        android:id="@+id/navigation_settings"
+        android:icon="@drawable/ic_baseline_settings_24"
+        android:title="@string/title_settings" />
+
 </menu>

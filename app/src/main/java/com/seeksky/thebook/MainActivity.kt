@@ -1,6 +1,9 @@
 package com.seeksky.thebook
 
+import android.app.Activity
 import android.os.Bundle
+import android.view.View
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
@@ -8,31 +11,63 @@ import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.seeksky.thebook.databinding.ActivityMainBinding
+import com.seeksky.thebook.security.AppLockManager
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private var unlockRequestInFlight = false
+
+    private val unlockLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        unlockRequestInFlight = false
+        if (result.resultCode == Activity.RESULT_OK || !AppLockManager.isEnabled()) {
+            updateLockOverlay()
+        } else {
+            finishAndRemoveTask()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        updateLockOverlay()
 
         val navView: BottomNavigationView = binding.navView
-
         val navController = findNavController(R.id.nav_host_fragment_activity_main)
-        // Passing each menu ID as a set of Ids because each
-        // menu should be considered as top level destinations.
         val appBarConfiguration = AppBarConfiguration(
             setOf(
                 R.id.navigation_record,
                 R.id.navigation_chart,
-                R.id.navigation_mine
+                R.id.navigation_mine,
+                R.id.navigation_settings
             )
         )
         setupActionBarWithNavController(navController, appBarConfiguration)
         navView.setupWithNavController(navController)
+    }
 
+    override fun onStart() {
+        super.onStart()
+        requestUnlockIfNeeded()
+    }
+
+    private fun requestUnlockIfNeeded() {
+        updateLockOverlay()
+        if (!AppLockManager.shouldAuthenticate() || unlockRequestInFlight) return
+
+        unlockRequestInFlight = true
+        unlockLauncher.launch(UnlockActivity.createUnlockIntent(this))
+    }
+
+    private fun updateLockOverlay() {
+        binding.appLockOverlay.visibility = if (AppLockManager.shouldAuthenticate()) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
     }
 }

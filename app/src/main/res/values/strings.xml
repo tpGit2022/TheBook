@@ -11,6 +11,7 @@
     <string name="title_mine">我的</string>
     <string name="title_statistics">统计</string>
     <string name="title_record">记录</string>
+    <string name="title_settings">设置</string>
     <string name="statistics_tip">近月统计:</string>
     <string name="btn_ok">确定</string>
     <string name="btn_yes">是</string>
@@ -43,6 +44,27 @@
     <string name="workspace_selected">工作目录已保存</string>
     <string name="workspace_select_first">请先选择 00SERVER 文件夹</string>
     <string name="workspace_select_failed">无法使用所选目录，请确认目录可读写</string>
+
+    <string name="settings_security_title">安全</string>
+    <string name="fingerprint_lock_title">指纹锁</string>
+    <string name="fingerprint_lock_description">开启后，每次启动 App 或从后台返回时都需要验证设备指纹。</string>
+    <string name="fingerprint_status_enabled">已开启</string>
+    <string name="fingerprint_status_disabled">已关闭</string>
+    <string name="fingerprint_status_available">可以使用设备指纹</string>
+    <string name="fingerprint_status_no_hardware">此设备不支持指纹识别</string>
+    <string name="fingerprint_status_none_enrolled">请先在系统设置中录入指纹</string>
+    <string name="fingerprint_status_unavailable">指纹识别当前不可用</string>
+    <string name="fingerprint_prompt_title">验证指纹</string>
+    <string name="fingerprint_unlock_prompt_subtitle">请验证指纹以访问 TheBook</string>
+    <string name="fingerprint_enable_prompt_subtitle">请验证指纹以开启指纹锁</string>
+    <string name="fingerprint_prompt_cancel">取消</string>
+    <string name="fingerprint_prompt_exit">退出应用</string>
+    <string name="fingerprint_locked_message">TheBook 已锁定，请完成指纹验证</string>
+    <string name="fingerprint_enabled">指纹锁已开启</string>
+    <string name="fingerprint_disabled">指纹锁已关闭</string>
+    <string name="fingerprint_enable_cancelled">未完成验证，指纹锁没有开启</string>
+    <string name="fingerprint_not_recognized">指纹不匹配，请重试</string>
+    <string name="fingerprint_unlock_unavailable">无法验证指纹：%1$s</string>
 
     <string name="pomodoro_title">番茄钟</string>
     <string name="pomodoro_status_idle">准备专注</string>

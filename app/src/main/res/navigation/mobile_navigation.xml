@@ -20,4 +20,9 @@
         android:name="com.seeksky.thebook.ui.MineFragment"
         android:label="@string/title_mine"
         tools:layout="@layout/fragment_mine" />
+    <fragment
+        android:id="@+id/navigation_settings"
+        android:name="com.seeksky.thebook.ui.SettingsFragment"
+        android:label="@string/title_settings"
+        tools:layout="@layout/fragment_settings" />
 </navigation>
