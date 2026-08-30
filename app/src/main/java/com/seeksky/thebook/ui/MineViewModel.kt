@@ -1,6 +1,5 @@
 package com.seeksky.thebook.ui
 
-import android.annotation.SuppressLint
 import android.app.Application
 import android.content.ContentResolver
 import android.net.Uri
@@ -8,38 +7,35 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import com.blankj.utilcode.util.SDCardUtils
+import androidx.documentfile.provider.DocumentFile
 import com.blankj.utilcode.util.ToastUtils
 import com.seeksky.thebook.App
 import com.seeksky.thebook.backup.DatabaseBackupExporter
 import com.seeksky.thebook.backup.DatabaseBackupProgress
 import com.seeksky.thebook.database.DatabaseProvider
 import com.seeksky.thebook.database.entry.Daily
-import com.seeksky.thebook.tool.applySchedulers
+import com.seeksky.thebook.storage.SafWorkspace
 import com.seeksky.thebook.tool.createMonthStats
 import com.seeksky.thebook.tool.parseDailyBackup
 import com.seeksky.thebook.tool.toRecordKey
 import com.seeksky.toolbox.tool.OnProcessListener
+import com.seeksky.toolbox.tool.FileDigest
 import com.seeksky.toolbox.tool.decryptBigFileWithAES256
 import com.seeksky.toolbox.tool.encryptBigFileWithAES256
 import com.seeksky.toolbox.tool.getAesEncryptKey
+import com.seeksky.toolbox.tool.getFileDigest
 import com.seeksky.toolbox.tool.getFileMD5
-import com.seeksky.toolbox.tool.getPathDFSHelper
 import com.seeksky.toolbox.tool.initialVector
 import com.seeksky.toolbox.tool.parseUserDefineFileHead
 import com.seeksky.toolbox.tool.writeUserDefineFileHead
-import io.reactivex.Completable
 import io.reactivex.Observable
-import io.reactivex.Observer
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.BehaviorSubject
 import jxl.Workbook
 import jxl.write.Label
-import java.io.File
-import java.lang.Exception
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -75,6 +71,12 @@ private data class ImportInspection(
     val duplicateCount: Int
 )
 
+private data class WorkspaceSourceFile(
+    val document: DocumentFile,
+    val name: String,
+    val digest: FileDigest
+)
+
 class MineViewModel(application: Application) : AndroidViewModel(application) {
     private val getContentResolver by lazy {
         getApplication<App>().contentResolver
@@ -106,18 +108,13 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
     private val logSubject = BehaviorSubject.createDefault("")
     private val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
-    private val sdcardPath: String = SDCardUtils.getSDCardPathByEnvironment()
-    private val targetDirPath = sdcardPath + File.separator + "00SERVER"
-    private val originMediaBaseDir = File(targetDirPath, "/origin_media_data")
-    private val encryptBaseDir = File(targetDirPath, "/f_input/encrypt_data")
-    private val decryptBaseDir = File(targetDirPath, "/f_output/decrypt_data")
+    private val safWorkspace = SafWorkspace(application)
+    @Volatile
+    private var fileOperationRunning = false
 
     private val disposables = CompositeDisposable() // 管理所有订阅
     init {
-        var tip = String.format("原始数据目录:\n%s\n加密数据目录:\n%s\n解密数据目录:\n%s", originMediaBaseDir, encryptBaseDir, decryptBaseDir)
-        tip = tip.plus(String.format("\n\nAES Key:%s", getAesEncryptKey().joinToString("") { "%02x".format(it) }))
-        tip = tip.plus(String.format("\n\nAES IV :%s", initialVector.joinToString("") { "%02x".format(it) }))
-        _mTextDirInfo.value = tip
+        refreshWorkspaceInfo()
         _mTextLog.value = ""
         val disposable = logSubject
             .filter { it.isNotBlank() } // 过滤掉空白日志
@@ -136,139 +133,265 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
         disposables.add(disposable)
     }
 
-    @SuppressLint("CheckResult")
-    fun encryptData(): Boolean {
-        logSubject.onNext("开始加密操作...")
-        if (!originMediaBaseDir.exists()) originMediaBaseDir.mkdirs()
-        if (!encryptBaseDir.exists()) encryptBaseDir.mkdirs()
-        if (!decryptBaseDir.exists()) decryptBaseDir.mkdirs()
-        val originMediaFileList = mutableListOf<String>()
-        getPathDFSHelper(originMediaFileList, originMediaBaseDir.absolutePath, 0)
-        logSubject.onNext("待处理文件个数${originMediaFileList.size}")
-        var processFileSize = 0L
-        val progressSubject = BehaviorSubject.createDefault(0.0)
-        progressSubject.subscribe{ processRate ->
-            _mProcessText.postValue(String.format("加密进度%.2f",  processRate * 100))
+    fun hasWorkspaceAccess(): Boolean = safWorkspace.hasPersistedAccess()
+
+    fun selectWorkspace(uri: Uri): Boolean {
+        return try {
+            safWorkspace.persist(uri)
+            safWorkspace.openDirectories()
+            refreshWorkspaceInfo()
+            logSubject.onNext("工作目录授权成功")
+            true
+        } catch (error: Exception) {
+            safWorkspace.clearPersistedAccess()
+            refreshWorkspaceInfo()
+            logSubject.onNext("工作目录授权失败：${error.message ?: "未知错误"}")
+            false
         }
-        Observable.fromIterable(originMediaFileList).subscribeOn(Schedulers.io())
-            .flatMap { filePath -> Observable.fromCallable { File(filePath).length() } }
-            .reduce { totalSize, fileSize -> totalSize + fileSize }
-            .flatMapCompletable { totalSize ->
-                Observable.fromIterable(originMediaFileList)
-                    .flatMapCompletable { filePath ->
-                        Completable.fromCallable {
-                            val fileName = filePath.substring(filePath.lastIndexOf(File.separator) + 1)
-                            val newFileName = String.format("%s_%s.%s", fileName.substring(0, fileName.lastIndexOf('.')), getFileMD5(filePath), File(filePath).extension)
-                            val outputFilePath = File(encryptBaseDir, newFileName).absolutePath
-                            val fileInfo = writeUserDefineFileHead(filePath, outputFilePath, file_head_version = 1)
-                            logSubject.onNext("加密文件${fileName}-->${newFileName}")
-                            Log.d("seeksky", fileInfo.toString())
-                            val result = encryptBigFileWithAES256(filePath, outputFilePath, callback = object :
-                                OnProcessListener {
+    }
+
+    fun refreshWorkspaceInfo() {
+        val selectedName = safWorkspace.selectedDirectoryName()
+        var tip = if (selectedName == null) {
+            "尚未选择加解密工作目录\n请选择 00SERVER 文件夹"
+        } else {
+            "当前工作目录：$selectedName\n" +
+                "原始数据目录：origin_media_data/\n" +
+                "加密数据目录：f_input/encrypt_data/\n" +
+                "解密数据目录：f_output/decrypt_data/"
+        }
+        tip += String.format(
+            "\n\nAES Key:%s",
+            getAesEncryptKey().joinToString("") { "%02x".format(it) }
+        )
+        tip += String.format(
+            "\n\nAES IV :%s",
+            initialVector.joinToString("") { "%02x".format(it) }
+        )
+        _mTextDirInfo.value = tip
+    }
+
+    fun encryptData(): Boolean {
+        if (!hasWorkspaceAccess()) {
+            logSubject.onNext("请先选择 00SERVER 工作目录")
+            return false
+        }
+        if (fileOperationRunning) {
+            logSubject.onNext("已有文件任务正在执行，请稍候")
+            return false
+        }
+        fileOperationRunning = true
+        logSubject.onNext("开始加密操作...")
+        val disposable = Observable.fromCallable {
+            val directories = safWorkspace.openDirectories()
+            val documents = safWorkspace.listFilesRecursively(directories.originalFiles)
+            logSubject.onNext("待加密文件个数：${documents.size}")
+            if (documents.isEmpty()) {
+                _mProcessText.postValue("没有待加密文件")
+                return@fromCallable 0
+            }
+
+            val files = documents.map { document ->
+                val name = document.name ?: "未命名文件"
+                val digest = getContentResolver.openInputStream(document.uri)
+                    ?.use(::getFileDigest)
+                    ?: throw IOException("无法读取文件：$name")
+                WorkspaceSourceFile(document, name, digest)
+            }
+            val totalSize = files.fold(0L) { total, file -> total + file.digest.size }
+            var completedSize = 0L
+            files.forEach { source ->
+                val inputFile = source.document
+                val inputName = source.name
+                val digest = source.digest
+                val fileMd5 = digest.md5
+                val outputName = encryptedOutputName(inputName, fileMd5)
+                val outputFile = safWorkspace.replaceFile(directories.encryptedFiles, outputName)
+                try {
+                    getContentResolver.openOutputStream(outputFile.uri, "w")?.use { output ->
+                        getContentResolver.openInputStream(inputFile.uri)?.use { input ->
+                            writeUserDefineFileHead(
+                                inputFileName = inputName,
+                                inputFileSize = digest.size,
+                                fileMd5 = fileMd5,
+                                inputStream = input,
+                                outputStream = output,
+                                fileHeadVersion = 1
+                            )
+                        } ?: throw IOException("无法读取文件：$inputName")
+
+                        getContentResolver.openInputStream(inputFile.uri)?.use { input ->
+                            encryptBigFileWithAES256(input, output, object : OnProcessListener {
                                 override fun encryptDataSize(processSize: Long) {
-                                    val processRate = ((processFileSize + processSize) * 1.0 / totalSize)
-                                    progressSubject.onNext(processRate)
+                                    postProgress("加密", completedSize, processSize, totalSize)
                                 }
                             })
-                            processFileSize += File(filePath).length()
-                            @Suppress("UNUSED_EXPRESSION")
-                            result
-                        }.subscribeOn(Schedulers.io())
+                        } ?: throw IOException("无法读取文件：$inputName")
+                    } ?: throw IOException("无法写入文件：$outputName")
+                } catch (error: Exception) {
+                    outputFile.delete()
+                    throw error
+                }
+                completedSize += digest.size
+                logSubject.onNext("加密文件 $inputName → $outputName")
+            }
+            files.size
+        }
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                { count ->
+                    fileOperationRunning = false
+                    if (count > 0) {
+                        _mProcessText.value = "加密完成"
+                        logSubject.onNext("加密完成，共处理 $count 个文件")
                     }
-            }.observeOn(AndroidSchedulers.mainThread()).subscribe(
-                {
-                    // 加密完成
-                    progressSubject.onComplete()
                 },
-                {
-                    // 处理错误
+                { error ->
+                    fileOperationRunning = false
+                    _mProcessText.value = "加密失败"
+                    logSubject.onNext("加密失败：${error.message ?: "未知错误"}")
                 }
             )
-        return false
+        disposables.add(disposable)
+        return true
     }
 
     fun decryptData(): Boolean {
+        if (!hasWorkspaceAccess()) {
+            logSubject.onNext("请先选择 00SERVER 工作目录")
+            return false
+        }
+        if (fileOperationRunning) {
+            logSubject.onNext("已有文件任务正在执行，请稍候")
+            return false
+        }
+        fileOperationRunning = true
         logSubject.onNext("开始解密操作...")
-        if (!encryptBaseDir.exists()) encryptBaseDir.mkdirs()
-        if (!decryptBaseDir.exists()) decryptBaseDir.mkdirs()
-        val encryptFileList = mutableListOf<String>()
-        getPathDFSHelper(encryptFileList, encryptBaseDir.absolutePath, 0)
-        val decryptFileList = mutableListOf<String>()
-        getPathDFSHelper(decryptFileList, decryptBaseDir.absolutePath, 0)
-        var processFileSize = 0L
-        val progressSubject = BehaviorSubject.createDefault(0.0)
-        disposables.add(progressSubject.subscribe{ processRate ->
-            _mProcessText.postValue(String.format("解密文件进度%.2f",  processRate * 100))
-        })
+        val disposable = Observable.fromCallable {
+            val directories = safWorkspace.openDirectories()
+            val files = safWorkspace.listFilesRecursively(directories.encryptedFiles)
+            logSubject.onNext("待解密文件个数：${files.size}")
+            if (files.isEmpty()) {
+                _mProcessText.postValue("没有待解密文件")
+                return@fromCallable 0
+            }
 
-        disposables.add(Observable.fromIterable(encryptFileList).subscribeOn(Schedulers.io())
-            .flatMap { filePath -> Observable.fromCallable { File(filePath).length() } }
-            .reduce { totalSize, fileSize -> totalSize + fileSize }
-            .flatMapCompletable { totalSize ->
-                Observable.fromIterable(encryptFileList)
-                    .flatMapCompletable { f ->
-                        Completable.fromCallable {
-                            val fileInfo = parseUserDefineFileHead(f)
-                            Log.d("seeksky", fileInfo.toString())
-                            val fileName = f.substring(f.lastIndexOf(File.separator) + 1)
-                            logSubject.onNext("解密文件${fileName}-->${fileInfo.fileNameInHead}")
-                            val outputFilePath = File(decryptBaseDir, fileInfo.fileNameInHead).absolutePath
-                            val result = decryptBigFileWithAES256(f, outputFilePath, fileInfo.fileHeadBytesCount, callback = object : OnProcessListener {
-                                override fun decryptDataSize(processSize: Long) {
-                                    val processRate = ((processFileSize + processSize) * 1.0 / totalSize)
-                                    progressSubject.onNext(processRate)
+            val totalSize = files.fold(0L) { total, file -> total + file.length() }
+            var completedSize = 0L
+            files.forEach { inputFile ->
+                val inputName = inputFile.name ?: "未命名文件"
+                val fileInfo = getContentResolver.openInputStream(inputFile.uri)?.use { input ->
+                    parseUserDefineFileHead(inputName, input)
+                } ?: throw IOException("无法读取文件：$inputName")
+                Log.d("seeksky", fileInfo.toString())
+
+                val outputFile = safWorkspace.replaceFile(
+                    directories.decryptedFiles,
+                    fileInfo.fileNameInHead
+                )
+                try {
+                    getContentResolver.openInputStream(inputFile.uri)?.use { input ->
+                        getContentResolver.openOutputStream(outputFile.uri, "w")?.use { output ->
+                            decryptBigFileWithAES256(
+                                input,
+                                output,
+                                fileInfo.fileHeadBytesCount,
+                                object : OnProcessListener {
+                                    override fun decryptDataSize(processSize: Long) {
+                                        postProgress("解密", completedSize, processSize, totalSize)
+                                    }
                                 }
-                            })
-                            val fileMD5 = getFileMD5(outputFilePath)
-                            if (fileInfo.fileMd5 != fileMD5) {
-                                val tip = String.format("\n解密后文件%s的MD5与源文件不符\n原始文件MD5:%s\n解密文件MD5:%s", fileName, fileInfo.fileMd5, fileMD5)
-                                _mTextLog.postValue(_mProcessText.value.plus(tip))
-                            }
-                            processFileSize += File(f).length()
-                            @Suppress("UNUSED_EXPRESSION")
-                            result
-                        }.subscribeOn(Schedulers.io())
+                            )
+                        } ?: throw IOException("无法写入文件：${fileInfo.fileNameInHead}")
+                    } ?: throw IOException("无法读取文件：$inputName")
+
+                    val decryptedMd5 = getContentResolver.openInputStream(outputFile.uri)
+                        ?.use(::getFileMD5)
+                        ?: throw IOException("无法校验文件：${fileInfo.fileNameInHead}")
+                    if (!fileInfo.fileMd5.equals(decryptedMd5, ignoreCase = true)) {
+                        throw IOException(
+                            "文件 $inputName 校验失败，原始 MD5=${fileInfo.fileMd5}，" +
+                                "解密 MD5=$decryptedMd5"
+                        )
                     }
-            }.observeOn(AndroidSchedulers.mainThread()).subscribe(
-                {
-                    // 加密完成
-                },
-                {
-                    // 处理错误
+                } catch (error: Exception) {
+                    outputFile.delete()
+                    throw error
                 }
-            ))
-        return false
+                completedSize += inputFile.length()
+                logSubject.onNext("解密文件 $inputName → ${fileInfo.fileNameInHead}")
+            }
+            files.size
+        }
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                { count ->
+                    fileOperationRunning = false
+                    if (count > 0) {
+                        _mProcessText.value = "解密完成"
+                        logSubject.onNext("解密完成，共处理 $count 个文件")
+                    }
+                },
+                { error ->
+                    fileOperationRunning = false
+                    _mProcessText.value = "解密失败"
+                    logSubject.onNext("解密失败：${error.message ?: "未知错误"}")
+                }
+            )
+        disposables.add(disposable)
+        return true
+    }
+
+    private fun encryptedOutputName(inputName: String, md5: String): String {
+        val dotIndex = inputName.lastIndexOf('.')
+        val hasExtension = dotIndex > 0 && dotIndex < inputName.lastIndex
+        val baseName = if (hasExtension) inputName.substring(0, dotIndex) else inputName
+        return if (hasExtension) {
+            "${baseName}_$md5.${inputName.substring(dotIndex + 1)}"
+        } else {
+            "${baseName}_$md5"
+        }
+    }
+
+    private fun postProgress(
+        operation: String,
+        completedSize: Long,
+        currentFileSize: Long,
+        totalSize: Long
+    ) {
+        val rate = if (totalSize <= 0L) 1.0 else {
+            ((completedSize + currentFileSize).toDouble() / totalSize).coerceIn(0.0, 1.0)
+        }
+        _mProcessText.postValue(
+            String.format(Locale.getDefault(), "%s进度 %.2f%%", operation, rate * 100)
+        )
     }
     fun exportDataToXls(uri: Uri) {
         if (isDatabaseBackupRunning()) return
-        Observable.create<List<Daily>>{
+        val disposable = Observable.fromCallable {
             val list = DatabaseProvider.withDatabase(getApplication()) { database ->
                 database.getDailyDAO().getDailyDataSortByDESC()
             }
-            it.onNext(list)
-            it.onComplete()
-        }.compose(applySchedulers()).subscribe(object:
-            Observer<List<Daily>> {
-            override fun onComplete() {
-            }
-
-            override fun onSubscribe(d: Disposable) {
-                disposables.add(d)
-            }
-
-            override fun onNext(t: List<Daily>) {
-                if (saveXlsDataWithContentResolver(getContentResolver, uri, t)) {
-                    ToastUtils.showLong("导出数据成功")
-                } else {
-                    ToastUtils.showLong("导出数据失败")
+            saveXlsDataWithContentResolver(getContentResolver, uri, list)
+        }
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe(
+                { success ->
+                    if (success) {
+                        ToastUtils.showLong("导出数据成功")
+                    } else {
+                        ToastUtils.showLong("导出数据失败")
+                    }
+                },
+                { error ->
+                    error.printStackTrace()
+                    ToastUtils.showLong("导出数据失败：${error.message.orEmpty()}")
                 }
-            }
-
-            override fun onError(e: Throwable) {
-                e.printStackTrace()
-                ToastUtils.showLong("导出数据失败：${e.message.orEmpty()}")
-            }
-        })
+            )
+        disposables.add(disposable)
     }
 
     fun prepareDataImport(uri: Uri) {
@@ -449,28 +572,29 @@ class MineViewModel(application: Application) : AndroidViewModel(application) {
      */
     private fun saveXlsDataWithContentResolver(contentResolver: ContentResolver, uri: Uri, list: List<Daily>): Boolean {
         try {
-            val outputStream = contentResolver.openOutputStream(uri)
-            val workbook = Workbook.createWorkbook(outputStream)
-            val sheet = workbook.createSheet("daily", 0)
-            for (r in list.indices) {
-                val id = Label(0, r, list[r].id.toString())
-                sheet.addCell(id)
-                val title = Label(1, r, list[r].title)
-                sheet.addCell(title)
-                val year = Label(2, r, list[r].year.toString())
-                sheet.addCell(year)
-                val month = Label(3, r, list[r].month.toString())
-                sheet.addCell(month)
-                val day = Label(4, r, list[r].day.toString())
-                sheet.addCell(day)
-                val hour = Label(5, r, list[r].hour.toString())
-                sheet.addCell(hour)
-                val time = Label(6, r, list[r].time.toString())
-                sheet.addCell(time)
+            val outputStream = contentResolver.openOutputStream(uri) ?: return false
+            outputStream.use { output ->
+                val workbook = Workbook.createWorkbook(output)
+                val sheet = workbook.createSheet("daily", 0)
+                for (r in list.indices) {
+                    val id = Label(0, r, list[r].id.toString())
+                    sheet.addCell(id)
+                    val title = Label(1, r, list[r].title)
+                    sheet.addCell(title)
+                    val year = Label(2, r, list[r].year.toString())
+                    sheet.addCell(year)
+                    val month = Label(3, r, list[r].month.toString())
+                    sheet.addCell(month)
+                    val day = Label(4, r, list[r].day.toString())
+                    sheet.addCell(day)
+                    val hour = Label(5, r, list[r].hour.toString())
+                    sheet.addCell(hour)
+                    val time = Label(6, r, list[r].time.toString())
+                    sheet.addCell(time)
+                }
+                workbook.write()
+                workbook.close()
             }
-            workbook.write()
-            workbook.close()
-            outputStream?.close()
             return true
         } catch (e: Exception) {
             return false

@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="file_tips">文件目录:</string>
-    <string name="tip_permission_request">由于Android系统限制，需要手动开启文件管理权限功能，是否跳转开启，拒绝将退出App?</string>
 </resources>

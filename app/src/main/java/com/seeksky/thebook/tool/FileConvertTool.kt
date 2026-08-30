@@ -46,7 +46,9 @@ import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.RandomAccessFile
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.security.MessageDigest
@@ -57,11 +59,16 @@ import javax.crypto.spec.SecretKeySpec
 const val userDefineAesFileEncryptKey = "Qwer1234!@#$"
 val initialVector = "aes_256_initial_vector".substring(0, 16).toByteArray(Charset.forName("UTF-8"))
 const val fileBlockSize = 1024 * 256
+private const val LEGACY_HEADER_SIZE = 60
+private const val MIN_VERSIONED_HEADER_SIZE = 68
+private const val MAX_HEADER_SIZE = 0xffff
 
 interface OnProcessListener {
     fun encryptDataSize(processSize: Long) {}
     fun decryptDataSize(processSize: Long) {}
 }
+
+data class FileDigest(val md5: String, val size: Long)
 
 fun getAesEncryptKey(userInputKey: String = ""): ByteArray {
     var encryptKey = userInputKey
@@ -73,46 +80,83 @@ fun getAesEncryptKey(userInputKey: String = ""): ByteArray {
 }
 
 fun getFileMD5(inputFilePath: String): String {
+    return File(inputFilePath).inputStream().use(::getFileMD5)
+}
+
+fun getFileMD5(inputStream: InputStream): String {
+    return getFileDigest(inputStream).md5
+}
+
+fun getFileDigest(inputStream: InputStream): FileDigest {
     val md5 = MessageDigest.getInstance("MD5")
-    val file = File(inputFilePath)
-    file.inputStream().use { inputStream ->
-        val buffer = ByteArray(8192)
-        var bytesRead = inputStream.read(buffer)
-        while (bytesRead != -1) {
-            md5.update(buffer, 0, bytesRead)
-            bytesRead = inputStream.read(buffer)
-        }
+    val buffer = ByteArray(8192)
+    var totalBytes = 0L
+    var bytesRead = inputStream.read(buffer)
+    while (bytesRead != -1) {
+        md5.update(buffer, 0, bytesRead)
+        totalBytes += bytesRead
+        bytesRead = inputStream.read(buffer)
     }
-    return md5.digest().joinToString("") { "%02x".format(it) }
+    return FileDigest(
+        md5 = md5.digest().joinToString("") { "%02x".format(it) },
+        size = totalBytes
+    )
 }
 
 
-fun writeUserDefineFileHead(input_file: String, output_file: String, file_head_version: Int = 0): FileConvertInfoEntry {
-    val fileMd5Str = getFileMD5(input_file)
-    val fileMagicNumberBytes = ByteArray(Constants.FILE_MAGIC_NUMBER) { 0x00 }
-    val inputFileTotalSize = File(input_file).length()
-    val fileSizeBytesCount = ((inputFileTotalSize.toString(16).length + 1) / 2)
-    val tpInputFileName = File(input_file).name
-    val fileNameBytesCount = tpInputFileName.toByteArray(Charsets.UTF_8).size
-    val userDefineFileHeadList = mutableListOf<Byte>()
-    RandomAccessFile(input_file, "r").use { f_input ->
-        val readFileMagicNumber = ByteArray(Constants.FILE_MAGIC_NUMBER)
-        f_input.read(readFileMagicNumber)
-        val fileMagicList = fileMagicNumberBytes.toMutableList()
-        fileMagicList.subList(0, readFileMagicNumber.size).clear()
-        fileMagicList.addAll(readFileMagicNumber.toList())
-        userDefineFileHeadList.addAll(fileMagicList.toByteArray().toList())
+fun writeUserDefineFileHead(
+    input_file: String,
+    output_file: String,
+    file_head_version: Int = 0
+): FileConvertInfoEntry {
+    val inputFile = File(input_file)
+    val fileMd5 = getFileMD5(input_file)
+    return FileInputStream(inputFile).use { input ->
+        FileOutputStream(output_file, false).use { output ->
+            writeUserDefineFileHead(
+                inputFileName = inputFile.name,
+                inputFileSize = inputFile.length(),
+                fileMd5 = fileMd5,
+                inputStream = input,
+                outputStream = output,
+                fileHeadVersion = file_head_version
+            )
+        }
     }
+}
+
+fun writeUserDefineFileHead(
+    inputFileName: String,
+    inputFileSize: Long,
+    fileMd5: String,
+    inputStream: InputStream,
+    outputStream: OutputStream,
+    fileHeadVersion: Int = 1
+): FileConvertInfoEntry {
+    require(fileMd5.length == 32) { "MD5 must contain 32 hexadecimal characters" }
+    val fileMagicNumberBytes = ByteArray(Constants.FILE_MAGIC_NUMBER)
+    readUpTo(inputStream, fileMagicNumberBytes.size).copyInto(fileMagicNumberBytes)
+
+    val fileSizeBytesCount = if (inputFileSize == 0L) {
+        1
+    } else {
+        (inputFileSize.toString(16).length + 1) / 2
+    }
+    val fileNameBytes = inputFileName.toByteArray(Charsets.UTF_8)
+    val fileNameBytesCount = fileNameBytes.size
+    require(fileNameBytesCount <= 0xffff) { "File name is too long" }
+    val userDefineFileHeadList = mutableListOf<Byte>()
+    userDefineFileHeadList.addAll(fileMagicNumberBytes.toList())
     userDefineFileHeadList.add(0x23.toByte()) // add # as version begin
-    userDefineFileHeadList.add(file_head_version.toByte())
+    userDefineFileHeadList.add(fileHeadVersion.toByte())
     // 存储自定义文件头的总字节数 先占位
     userDefineFileHeadList.add(0x00.toByte())
     userDefineFileHeadList.add(0x00.toByte())
-    userDefineFileHeadList.addAll(fileMd5Str.toByteArray().toList())
+    userDefineFileHeadList.addAll(fileMd5.toByteArray(Charsets.US_ASCII).toList())
 
     userDefineFileHeadList.add(fileSizeBytesCount.toByte())
 
-    var remainingSize = inputFileTotalSize
+    var remainingSize = inputFileSize
     if (remainingSize == 0L) {
         userDefineFileHeadList.add(0x00.toByte())
     } else {
@@ -122,23 +166,29 @@ fun writeUserDefineFileHead(input_file: String, output_file: String, file_head_v
         }
     }
 
-    userDefineFileHeadList.addAll(ByteBuffer.allocate(2).putShort(fileNameBytesCount.toShort()).array().toList().reversed())
+    userDefineFileHeadList.addAll(
+        ByteBuffer.allocate(2)
+            .putShort(fileNameBytesCount.toShort())
+            .array()
+            .toList()
+            .reversed()
+    )
 
-    userDefineFileHeadList.addAll(tpInputFileName.toByteArray().toList())
+    userDefineFileHeadList.addAll(fileNameBytes.toList())
     val userDefineFileHeadSize = userDefineFileHeadList.size
+    require(userDefineFileHeadSize <= 0xffff) { "File header is too large" }
     // Byte是有符号数类型
     userDefineFileHeadList[30] = (userDefineFileHeadSize and 0xff).toByte()
     userDefineFileHeadList[31] = ((userDefineFileHeadSize shr 8) and 0xff).toByte()
 
-    File(output_file).outputStream().use { f_output ->
-        f_output.write(userDefineFileHeadList.toByteArray())
-    }
+    outputStream.write(userDefineFileHeadList.toByteArray())
     val fileInfo = FileConvertInfoEntry()
-    fileInfo.fileName = tpInputFileName
-    fileInfo.fileMd5 = fileMd5Str
-    fileInfo.fileHeadVersion = file_head_version
+    fileInfo.fileName = inputFileName
+    fileInfo.fileNameInHead = inputFileName
+    fileInfo.fileMd5 = fileMd5
+    fileInfo.fileHeadVersion = fileHeadVersion
     fileInfo.fileSizeBytesCount = fileSizeBytesCount
-    fileInfo.fileSize = inputFileTotalSize
+    fileInfo.fileSize = inputFileSize
     fileInfo.fileNameBytesCount = fileNameBytesCount
     fileInfo.fileHeadBytesCount = userDefineFileHeadSize
     return fileInfo
@@ -146,65 +196,96 @@ fun writeUserDefineFileHead(input_file: String, output_file: String, file_head_v
 
 
 fun parseUserDefineFileHead(inputFilePath: String): FileConvertInfoEntry {
-    val rsFileInfo = FileConvertInfoEntry()
-    val tpInputFileName = File(inputFilePath).name
-    val bis = BufferedInputStream(FileInputStream(inputFilePath))
-    val readBuffer = ByteArray(500)
-    val realReadBytesCount = bis.read(readBuffer)
-    bis.close()
-    val saturatedReadBytes = readBuffer.sliceArray(0 until realReadBytesCount)
-    var useDefineFileHeadVersion = 0
-    if (saturatedReadBytes[28] == 0x23.toByte()) {
-        useDefineFileHeadVersion = saturatedReadBytes[29].toInt()
-    } else {
-        val md5Bytes = saturatedReadBytes.sliceArray(28 until 60)
-        rsFileInfo.fileHeadVersion = useDefineFileHeadVersion
-        rsFileInfo.fileMd5 = md5Bytes.decodeToString()
-        rsFileInfo.fileName = tpInputFileName
-        rsFileInfo.fileNameInHead = tpInputFileName
-        rsFileInfo.fileHeadBytesCount = 60
-        return rsFileInfo
+    val inputFile = File(inputFilePath)
+    return BufferedInputStream(FileInputStream(inputFile)).use { input ->
+        parseUserDefineFileHead(inputFile.name, input)
+    }
+}
+
+fun parseUserDefineFileHead(
+    inputFileName: String,
+    inputStream: InputStream
+): FileConvertInfoEntry {
+    val prefix = readUpTo(inputStream, BASE_INDEX_START + 1)
+    if (prefix.size < LEGACY_HEADER_SIZE) {
+        throw IOException("Encrypted file header is incomplete")
     }
 
-    // 前面存储的Bytes是有符号数直接toInt会导致超过127的变成负数
-//    val fileHeadBytesCount = (saturatedReadBytes[31].toInt() shl 8) + saturatedReadBytes[30].toInt()
-    val fileHeadBytesCount = (saturatedReadBytes[31].toUByte().toInt() shl 8) + saturatedReadBytes[30].toUByte().toInt()
-    val md5Bytes = saturatedReadBytes.sliceArray(32 until 64)
-
-    val fileLengthBytesCount = saturatedReadBytes[BASE_INDEX_START].toInt()
-    var startIndex = BASE_INDEX_START + 1
-    val end = BASE_INDEX_START + 1 + fileLengthBytesCount
-    val fileLength = saturatedReadBytes.slice(startIndex until end)
-        .foldRight(0L) { byte, acc ->
-            (acc shl 8) or byte.toUByte().toLong()
+    if (prefix[28] != 0x23.toByte()) {
+        return FileConvertInfoEntry().apply {
+            fileHeadVersion = 0
+            fileMd5 = String(prefix, 28, 32, Charsets.US_ASCII)
+            fileName = inputFileName
+            fileNameInHead = inputFileName
+            fileHeadBytesCount = LEGACY_HEADER_SIZE
         }
-    startIndex = BASE_INDEX_START + fileLengthBytesCount + 1
-    val fileNameLengthBytesCount = (saturatedReadBytes[startIndex + 1].toInt() shl 8) + saturatedReadBytes[startIndex].toInt()
-    val fileNameBytes = saturatedReadBytes.sliceArray(startIndex + 2 until startIndex + 2 + fileNameLengthBytesCount)
-    val fileNameStr = fileNameBytes.decodeToString()
+    }
+    if (prefix.size < BASE_INDEX_START + 1) {
+        throw IOException("Encrypted file header is incomplete")
+    }
 
-    rsFileInfo.fileHeadVersion = useDefineFileHeadVersion
-    rsFileInfo.fileMd5 = md5Bytes.decodeToString()
-    rsFileInfo.fileName = tpInputFileName
-    rsFileInfo.fileSizeBytesCount = fileLengthBytesCount
-    rsFileInfo.fileSize = fileLength
-    rsFileInfo.fileNameBytesCount = 2
-    rsFileInfo.fileNameInHead = fileNameStr
-    rsFileInfo.fileHeadBytesCount = fileHeadBytesCount
-    return rsFileInfo
+    val headerSize = (prefix[31].toUByte().toInt() shl 8) or
+        prefix[30].toUByte().toInt()
+    if (headerSize < MIN_VERSIONED_HEADER_SIZE || headerSize > MAX_HEADER_SIZE) {
+        throw IOException("Encrypted file header size is invalid")
+    }
+    val remainingHeader = readExactly(inputStream, headerSize - prefix.size)
+    val header = prefix + remainingHeader
+
+    val fileSizeByteCount = header[BASE_INDEX_START].toUByte().toInt()
+    if (fileSizeByteCount !in 1..Long.SIZE_BYTES) {
+        throw IOException("Encrypted file size metadata is invalid")
+    }
+    val fileSizeStart = BASE_INDEX_START + 1
+    val fileNameLengthIndex = fileSizeStart + fileSizeByteCount
+    if (fileNameLengthIndex + 2 > header.size) {
+        throw IOException("Encrypted file name metadata is incomplete")
+    }
+
+    var fileSize = 0L
+    repeat(fileSizeByteCount) { index ->
+        fileSize = fileSize or
+            (header[fileSizeStart + index].toUByte().toLong() shl (index * 8))
+    }
+
+    val fileNameByteCount = header[fileNameLengthIndex].toUByte().toInt() or
+        (header[fileNameLengthIndex + 1].toUByte().toInt() shl 8)
+    val fileNameStart = fileNameLengthIndex + 2
+    val fileNameEnd = fileNameStart + fileNameByteCount
+    if (fileNameEnd > header.size) {
+        throw IOException("Encrypted file name metadata is incomplete")
+    }
+
+    return FileConvertInfoEntry().apply {
+        fileHeadVersion = header[29].toUByte().toInt()
+        fileMd5 = String(header, 32, 32, Charsets.US_ASCII)
+        fileName = inputFileName
+        fileSizeBytesCount = fileSizeByteCount
+        this.fileSize = fileSize
+        fileNameBytesCount = fileNameByteCount
+        fileNameInHead = String(header, fileNameStart, fileNameByteCount, Charsets.UTF_8)
+        fileHeadBytesCount = headerSize
+    }
 }
 
 
 fun encryptBigFileWithAES256(inputFilePath: String, outputFilePath: String, append: Boolean = true, callback: OnProcessListener? = null) {
+    FileInputStream(inputFilePath).use { inputStream ->
+        FileOutputStream(outputFilePath, append).use { outputStream ->
+            encryptBigFileWithAES256(inputStream, outputStream, callback)
+        }
+    }
+}
+
+fun encryptBigFileWithAES256(
+    inputStream: InputStream,
+    outputStream: OutputStream,
+    callback: OnProcessListener? = null
+) {
     val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
     val secretKey = SecretKeySpec(getAesEncryptKey(), "AES")
     val ivSpec = IvParameterSpec(initialVector)
     cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec)
-
-    val input = File(inputFilePath)
-    val output = File(outputFilePath)
-    val inputStream = FileInputStream(input)
-    val outputStream = FileOutputStream(output, append)
 
     val blockSize = fileBlockSize
     val inputBuffer = ByteArray(blockSize)
@@ -212,13 +293,8 @@ fun encryptBigFileWithAES256(inputFilePath: String, outputFilePath: String, appe
     var totalReadBytesSize = 0L
     while (inputStream.read(inputBuffer).also { bytesRead = it } != -1) {
         totalReadBytesSize += bytesRead
-        if (bytesRead == blockSize) {
-            val encryptedBytes = cipher.update(inputBuffer, 0, blockSize)
-            outputStream.write(encryptedBytes)
-        } else {
-            // need set buffer length to real read size
-            // 设置数组长度为真实读取长度值，若有效读取长度小于16 返回的encryptedBytes为空数组
-            val encryptedBytes = cipher.update(inputBuffer, 0, bytesRead)
+        val encryptedBytes = cipher.update(inputBuffer, 0, bytesRead)
+        if (encryptedBytes != null && encryptedBytes.isNotEmpty()) {
             outputStream.write(encryptedBytes)
         }
         //after send data to encrypt buffer, should reset buffer,avoid last read data
@@ -228,39 +304,41 @@ fun encryptBigFileWithAES256(inputFilePath: String, outputFilePath: String, appe
     // if you invoke cipher.update to encrypt file with stream mode, you should invoke doFinal()
     val encryptedBytes = cipher.doFinal()
     outputStream.write(encryptedBytes)
-    inputStream.close()
     outputStream.flush()
-    outputStream.close()
 }
 
 
 fun decryptBigFileWithAES256(inputFilePath: String, outputFilePath: String, skip_bytes: Int = 0, callback: OnProcessListener? = null) {
+    FileInputStream(inputFilePath).use { inputStream ->
+        FileOutputStream(outputFilePath).use { outputStream ->
+            decryptBigFileWithAES256(inputStream, outputStream, skip_bytes, callback)
+        }
+    }
+}
+
+fun decryptBigFileWithAES256(
+    inputStream: InputStream,
+    outputStream: OutputStream,
+    skipBytes: Int = 0,
+    callback: OnProcessListener? = null
+) {
     val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
     val secretKey = SecretKeySpec(getAesEncryptKey(), "AES")
     val ivSpec = IvParameterSpec(initialVector)
     cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
 
-    val input = File(inputFilePath)
-    val output = File(outputFilePath)
-    val inputStream = FileInputStream(input)
-    val outputStream = FileOutputStream(output)
-
     val blockSize = fileBlockSize
     val inputBuffer = ByteArray(blockSize)
 
     var bytesRead: Int
-    var totalReadBytesSize = skip_bytes.toLong()
+    var totalReadBytesSize = skipBytes.toLong()
     // we define a file head to store file magic number and md5 which size is 60, we should skip it
-    inputStream.skip(skip_bytes.toLong())
+    skipExactly(inputStream, skipBytes.toLong())
 
     while (inputStream.read(inputBuffer).also { bytesRead = it } != -1) {
         totalReadBytesSize += bytesRead
-        if (bytesRead == blockSize) {
-            val decryptedBytes = cipher.update(inputBuffer, 0, blockSize)
-            outputStream.write(decryptedBytes)
-        } else {
-            // 设置数组长度为真实读取长度值，若有效读取长度小于16 返回的decryptedBytes为空数组
-            val decryptedBytes = cipher.update(inputBuffer, 0, bytesRead)
+        val decryptedBytes = cipher.update(inputBuffer, 0, bytesRead)
+        if (decryptedBytes != null && decryptedBytes.isNotEmpty()) {
             outputStream.write(decryptedBytes)
         }
         //after send data to encrypt buffer, should reset buffer,avoid last read data
@@ -270,9 +348,48 @@ fun decryptBigFileWithAES256(inputFilePath: String, outputFilePath: String, skip
     // update方法可能返回空数组，调用doFinal获取最后一组处理后的数据
     val decryptedBytes = cipher.doFinal()
     outputStream.write(decryptedBytes)
-    inputStream.close()
     outputStream.flush()
-    outputStream.close()
+}
+
+private fun readUpTo(inputStream: InputStream, byteCount: Int): ByteArray {
+    require(byteCount >= 0) { "byteCount must not be negative" }
+    val buffer = ByteArray(byteCount)
+    var offset = 0
+    while (offset < byteCount) {
+        val count = inputStream.read(buffer, offset, byteCount - offset)
+        if (count < 0) break
+        if (count == 0) {
+            val value = inputStream.read()
+            if (value < 0) break
+            buffer[offset++] = value.toByte()
+        } else {
+            offset += count
+        }
+    }
+    return if (offset == buffer.size) buffer else buffer.copyOf(offset)
+}
+
+private fun readExactly(inputStream: InputStream, byteCount: Int): ByteArray {
+    val bytes = readUpTo(inputStream, byteCount)
+    if (bytes.size != byteCount) {
+        throw IOException("Encrypted file header is incomplete")
+    }
+    return bytes
+}
+
+private fun skipExactly(inputStream: InputStream, byteCount: Long) {
+    require(byteCount >= 0) { "byteCount must not be negative" }
+    var remaining = byteCount
+    while (remaining > 0) {
+        val skipped = inputStream.skip(remaining)
+        if (skipped > 0) {
+            remaining -= skipped
+        } else if (inputStream.read() >= 0) {
+            remaining--
+        } else {
+            throw IOException("Encrypted file is shorter than its header")
+        }
+    }
 }
 
 fun compareFiles(fileOne: String, fileTwo: String): Boolean {

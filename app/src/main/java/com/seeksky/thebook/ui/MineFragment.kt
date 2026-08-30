@@ -12,18 +12,44 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.afollestad.materialdialogs.MaterialDialog
 import com.blankj.utilcode.util.ToastUtils
-import com.permissionx.guolindev.PermissionX
 import com.seeksky.thebook.R
 import com.seeksky.thebook.databinding.FragmentMineBinding
 import java.text.SimpleDateFormat
 import java.util.*
 
 class MineFragment : Fragment() {
+
+    private enum class PendingFileOperation {
+        ENCRYPT,
+        DECRYPT
+    }
+
+    private var pendingFileOperation: PendingFileOperation? = null
+
+    private val selectWorkspaceDirectory = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) {
+            pendingFileOperation = null
+            return@registerForActivityResult
+        }
+
+        if (mineViewModel.selectWorkspace(uri)) {
+            binding.textMineSelectWorkspace.text = getString(R.string.workspace_change)
+            when (pendingFileOperation) {
+                PendingFileOperation.ENCRYPT -> mineViewModel.encryptData()
+                PendingFileOperation.DECRYPT -> mineViewModel.decryptData()
+                null -> ToastUtils.showShort(R.string.workspace_selected)
+            }
+        } else {
+            ToastUtils.showLong(R.string.workspace_select_failed)
+        }
+        pendingFileOperation = null
+    }
 
     private val createExportDocument = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (it.resultCode == Activity.RESULT_OK) {
@@ -182,6 +208,18 @@ class MineFragment : Fragment() {
             updateDatabaseOperationAvailability()
         }
 
+        binding.textMineSelectWorkspace.text = getString(
+            if (mineViewModel.hasWorkspaceAccess()) {
+                R.string.workspace_change
+            } else {
+                R.string.workspace_select
+            }
+        )
+        binding.textMineSelectWorkspace.setOnClickListener {
+            pendingFileOperation = null
+            selectWorkspaceDirectory.launch(null)
+        }
+
         val tvProcess = binding!!.textProcess
 //        binding!!.textLog.movementMethod = ScrollingMovementMethod.getInstance()
         mineViewModel.processText.observe(viewLifecycleOwner) { text: String? ->
@@ -210,13 +248,11 @@ class MineFragment : Fragment() {
             }
         })
 
-        binding!!.btnEncryptData.setOnClickListener {
-            checkPermission()
-            mineViewModel.encryptData()
+        binding.btnEncryptData.setOnClickListener {
+            runFileOperation(PendingFileOperation.ENCRYPT)
         }
-        binding!!.btnDecryptData.setOnClickListener {
-            checkPermission()
-            mineViewModel.decryptData()
+        binding.btnDecryptData.setOnClickListener {
+            runFileOperation(PendingFileOperation.DECRYPT)
         }
         return root
     }
@@ -251,6 +287,19 @@ class MineFragment : Fragment() {
             sdf.format(Calendar.getInstance().time)
         )
         createDatabaseBackupDocument.launch(fileName)
+    }
+
+    private fun runFileOperation(operation: PendingFileOperation) {
+        if (mineViewModel.hasWorkspaceAccess()) {
+            when (operation) {
+                PendingFileOperation.ENCRYPT -> mineViewModel.encryptData()
+                PendingFileOperation.DECRYPT -> mineViewModel.decryptData()
+            }
+        } else {
+            pendingFileOperation = operation
+            ToastUtils.showShort(R.string.workspace_select_first)
+            selectWorkspaceDirectory.launch(null)
+        }
     }
 
     private fun updateDatabaseOperationAvailability() {
@@ -310,31 +359,4 @@ class MineFragment : Fragment() {
         _binding = null
     }
 
-    private fun checkPermission() {
-        PermissionX.init(this).permissions(
-            android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            android.Manifest.permission.READ_EXTERNAL_STORAGE
-        )
-            .setDialogTintColor(
-                ContextCompat.getColor(requireContext(), R.color.brand_primary),
-                ContextCompat.getColor(requireContext(), R.color.text_secondary)
-            )
-            .onExplainRequestReason { scope, deniedList ->
-                val message = "ToolBox需要以下权限:"
-                scope.showRequestReasonDialog(deniedList, message, "确认", "取消")
-            }
-            .onForwardToSettings { scope, deniedList ->
-                scope.showForwardToSettingsDialog(deniedList, "您需要去应用设置中手动开启权限", "我已明白", "取消")
-            }
-            .request { allGranted, grantedList, deniedList ->
-                if (!allGranted) {
-                    MaterialDialog(requireContext()).show {
-                        message(R.string.exit_app_without_permission)
-                        positiveButton(R.string.btn_ok) {
-                            requireActivity().finish()
-                        }
-                    }
-                }
-            }
-    }
 }

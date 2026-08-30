@@ -12,7 +12,6 @@
     <string name="title_statistics">统计</string>
     <string name="title_record">记录</string>
     <string name="statistics_tip">近月统计:</string>
-    <string name="exit_app_without_permission">您拒绝了App运行所必须的权限，App将会退出</string>
     <string name="btn_ok">确定</string>
     <string name="btn_yes">是</string>
     <string name="btn_no">否</string>
@@ -39,7 +38,11 @@
     <string name="database_backup_success">数据库备份成功：%1$d 个文件，共 %2$s</string>
     <string name="database_backup_failed">数据库备份失败：%1$s</string>
     <string name="file_tips">文件目录:</string>
-    <string name="tip_permission_request">由于Android系统限制，需要手动开启文件管理权限功能，是否跳转开启，拒绝将退出App?</string>
+    <string name="workspace_select">选择加解密工作目录</string>
+    <string name="workspace_change">更换加解密工作目录</string>
+    <string name="workspace_selected">工作目录已保存</string>
+    <string name="workspace_select_first">请先选择 00SERVER 文件夹</string>
+    <string name="workspace_select_failed">无法使用所选目录，请确认目录可读写</string>
 
     <string name="pomodoro_title">番茄钟</string>
     <string name="pomodoro_status_idle">准备专注</string>
