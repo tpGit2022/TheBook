@@ -71,9 +71,9 @@
     <string name="pomodoro_status_running">专注中</string>
     <string name="pomodoro_status_paused">已暂停</string>
     <string name="pomodoro_status_finished">本次专注已完成</string>
+    <string name="pomodoro_duration_1">1 分钟</string>
+    <string name="pomodoro_duration_5">5 分钟</string>
     <string name="pomodoro_duration_15">15 分钟</string>
-    <string name="pomodoro_duration_25">25 分钟</string>
-    <string name="pomodoro_duration_45">45 分钟</string>
     <string name="pomodoro_start">开始</string>
     <string name="pomodoro_pause">暂停</string>
     <string name="pomodoro_resume">继续</string>
@@ -83,6 +83,10 @@
     <string name="pomodoro_end_confirm_message">当前计时进度不会保留。</string>
     <string name="pomodoro_notification_required_title">需要开启通知</string>
     <string name="pomodoro_notification_required_message">番茄钟依赖常驻通知在后台运行，请先在系统设置中允许通知。</string>
+    <string name="pomodoro_full_screen_required_title">需要允许全屏提醒</string>
+    <string name="pomodoro_full_screen_required_message">为了在后台或锁屏时像闹钟一样显示完成页面，请允许 TheBook 使用全屏提醒。</string>
+    <string name="pomodoro_alert_channel_required_title">需要开启强提醒</string>
+    <string name="pomodoro_alert_channel_required_message">“番茄钟完成提醒”当前不是高级别通知。请开启横幅或悬浮通知，并将通知重要程度设为高，才能在后台显示全屏提醒。</string>
     <string name="pomodoro_open_settings">打开设置</string>
     <string name="pomodoro_channel_running">番茄钟运行中</string>
     <string name="pomodoro_channel_running_description">显示正在运行或暂停的番茄钟</string>
@@ -94,4 +98,5 @@
     <string name="pomodoro_notification_chronometer_format" formatted="false">剩余 %s</string>
     <string name="pomodoro_complete_title">番茄钟完成</string>
     <string name="pomodoro_complete_message">辛苦了，起来休息一下吧。</string>
+    <string name="pomodoro_complete_dismiss">知道了</string>
 </resources>

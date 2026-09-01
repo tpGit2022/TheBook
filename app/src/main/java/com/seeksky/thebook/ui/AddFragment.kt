@@ -25,6 +25,7 @@ import com.seeksky.thebook.adapter.RecentRecordAdapter
 import com.seeksky.thebook.database.DatabaseProvider
 import com.seeksky.thebook.database.entry.Daily
 import com.seeksky.thebook.databinding.FragmentAddBinding
+import com.seeksky.thebook.pomodoro.PomodoroNotification
 import com.seeksky.thebook.pomodoro.PomodoroPhase
 import com.seeksky.thebook.pomodoro.PomodoroState
 import com.seeksky.thebook.tool.applySchedulers
@@ -42,7 +43,7 @@ class AddFragment : Fragment() {
     private lateinit var  adapter: BaseQuickAdapter<Daily, BaseViewHolder>
     private lateinit var pomodoroViewModel: PomodoroViewModel
     private val pomodoroHandler = Handler(Looper.getMainLooper())
-    private var selectedPomodoroMinutes = 25
+    private var selectedPomodoroMinutes = PomodoroState.DEFAULT_DURATION_MINUTES
     private val pomodoroTicker = object : Runnable {
         override fun run() {
             val state = pomodoroViewModel.state.value ?: return
@@ -182,9 +183,9 @@ class AddFragment : Fragment() {
         binding.togglePomodoroDuration.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
             selectedPomodoroMinutes = when (checkedId) {
+                R.id.button_duration_1 -> 1
                 R.id.button_duration_15 -> 15
-                R.id.button_duration_45 -> 45
-                else -> 25
+                else -> PomodoroState.DEFAULT_DURATION_MINUTES
             }
         }
 
@@ -192,10 +193,20 @@ class AddFragment : Fragment() {
             when (pomodoroViewModel.state.value?.phase ?: PomodoroPhase.IDLE) {
                 PomodoroPhase.IDLE,
                 PomodoroPhase.FINISHED -> {
-                    if (pomodoroViewModel.notificationsEnabled()) {
-                        pomodoroViewModel.start(selectedPomodoroMinutes)
-                    } else {
-                        showNotificationSettingsDialog()
+                    when {
+                        !pomodoroViewModel.notificationsEnabled() -> {
+                            showNotificationSettingsDialog()
+                        }
+
+                        !pomodoroViewModel.fullScreenIntentsEnabled() -> {
+                            showFullScreenIntentSettingsDialog()
+                        }
+
+                        !pomodoroViewModel.completionAlertsCanInterrupt() -> {
+                            showCompletionChannelSettingsDialog()
+                        }
+
+                        else -> pomodoroViewModel.start(selectedPomodoroMinutes)
                     }
                 }
 
@@ -224,7 +235,19 @@ class AddFragment : Fragment() {
         if (_binding == null) return
         pomodoroHandler.removeCallbacks(pomodoroTicker)
 
-        val remaining = pomodoroViewModel.remainingMillis(state)
+        if (!state.isActive) {
+            val storedMinutes = (state.durationMillis / 60_000L).toInt()
+            selectedPomodoroMinutes = when (storedMinutes) {
+                1, 5, 15 -> storedMinutes
+                else -> PomodoroState.DEFAULT_DURATION_MINUTES
+            }
+        }
+
+        val remaining = if (state.phase == PomodoroPhase.IDLE) {
+            selectedPomodoroMinutes * 60_000L
+        } else {
+            pomodoroViewModel.remainingMillis(state)
+        }
         binding.textPomodoroTime.text = formatPomodoroTime(remaining)
         binding.textPomodoroStatus.setText(
             when (state.phase) {
@@ -248,11 +271,10 @@ class AddFragment : Fragment() {
         setDurationButtonsEnabled(!isActive)
 
         if (!isActive) {
-            selectedPomodoroMinutes = (state.durationMillis / 60_000L).toInt()
             val checkedButton = when (selectedPomodoroMinutes) {
+                1 -> R.id.button_duration_1
                 15 -> R.id.button_duration_15
-                45 -> R.id.button_duration_45
-                else -> R.id.button_duration_25
+                else -> R.id.button_duration_5
             }
             if (binding.togglePomodoroDuration.checkedButtonId != checkedButton) {
                 binding.togglePomodoroDuration.check(checkedButton)
@@ -271,9 +293,9 @@ class AddFragment : Fragment() {
     }
 
     private fun setDurationButtonsEnabled(enabled: Boolean) {
+        binding.buttonDuration1.isEnabled = enabled
+        binding.buttonDuration5.isEnabled = enabled
         binding.buttonDuration15.isEnabled = enabled
-        binding.buttonDuration25.isEnabled = enabled
-        binding.buttonDuration45.isEnabled = enabled
     }
 
     private fun formatPomodoroTime(remainingMillis: Long): String {
@@ -300,6 +322,49 @@ class AddFragment : Fragment() {
                     Intent(
                         Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         Uri.parse("package:${requireContext().packageName}")
+                    )
+                }
+                startActivity(settingsIntent)
+            }
+        }
+    }
+
+    private fun showFullScreenIntentSettingsDialog() {
+        MaterialDialog(requireContext()).show {
+            title(R.string.pomodoro_full_screen_required_title)
+            message(R.string.pomodoro_full_screen_required_message)
+            negativeButton(R.string.btn_no)
+            positiveButton(R.string.pomodoro_open_settings) {
+                val fullScreenSettings = Intent(
+                    ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                    Uri.parse("package:${requireContext().packageName}")
+                )
+                val settingsIntent = if (
+                    fullScreenSettings.resolveActivity(requireContext().packageManager) != null
+                ) {
+                    fullScreenSettings
+                } else {
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:${requireContext().packageName}")
+                    )
+                }
+                startActivity(settingsIntent)
+            }
+        }
+    }
+
+    private fun showCompletionChannelSettingsDialog() {
+        MaterialDialog(requireContext()).show {
+            title(R.string.pomodoro_alert_channel_required_title)
+            message(R.string.pomodoro_alert_channel_required_message)
+            negativeButton(R.string.btn_no)
+            positiveButton(R.string.pomodoro_open_settings) {
+                val settingsIntent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, requireContext().packageName)
+                    putExtra(
+                        Settings.EXTRA_CHANNEL_ID,
+                        PomodoroNotification.CHANNEL_ALERTS
                     )
                 }
                 startActivity(settingsIntent)
@@ -343,6 +408,11 @@ class AddFragment : Fragment() {
                     e.printStackTrace()
                 }
             })
+    }
+
+    private companion object {
+        const val ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT =
+            "android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT"
     }
 
     private fun updateTopDay() {

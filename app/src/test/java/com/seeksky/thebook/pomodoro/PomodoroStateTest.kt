@@ -6,6 +6,11 @@ import org.junit.Test
 class PomodoroStateTest {
 
     @Test
+    fun defaultDurationIsFiveMinutes() {
+        assertEquals(5 * 60_000L, PomodoroState().durationMillis)
+    }
+
+    @Test
     fun runningStateUsesMonotonicClockDuringSameBoot() {
         val startedAt = PomodoroNow(
             elapsedRealtime = 10_000L,

@@ -5,6 +5,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
+import com.seeksky.thebook.MainActivity
 
 object PomodoroAlarmScheduler {
 
@@ -12,47 +14,27 @@ object PomodoroAlarmScheduler {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val operation = completionPendingIntent(context)
 
-        when {
+        if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                !alarmManager.canScheduleExactAlarms() -> {
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    triggerAtElapsedRealtime,
-                    operation
-                )
-            }
+            !alarmManager.canScheduleExactAlarms()
+        ) {
+            scheduleInexact(alarmManager, triggerAtElapsedRealtime, operation)
+            return
+        }
 
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                try {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        triggerAtElapsedRealtime,
-                        operation
-                    )
-                } catch (_: SecurityException) {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        triggerAtElapsedRealtime,
-                        operation
-                    )
-                }
-            }
-
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT -> {
-                alarmManager.setExact(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    triggerAtElapsedRealtime,
-                    operation
-                )
-            }
-
-            else -> {
-                alarmManager.set(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    triggerAtElapsedRealtime,
-                    operation
-                )
-            }
+        val remaining = (triggerAtElapsedRealtime - SystemClock.elapsedRealtime())
+            .coerceAtLeast(0L)
+        val triggerAtEpochMillis = System.currentTimeMillis() + remaining
+        try {
+            alarmManager.setAlarmClock(
+                AlarmManager.AlarmClockInfo(
+                    triggerAtEpochMillis,
+                    showTimerPendingIntent(context)
+                ),
+                operation
+            )
+        } catch (_: SecurityException) {
+            scheduleInexact(alarmManager, triggerAtElapsedRealtime, operation)
         }
     }
 
@@ -73,6 +55,38 @@ object PomodoroAlarmScheduler {
         )
     }
 
+    private fun showTimerPendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        return PendingIntent.getActivity(
+            context,
+            REQUEST_SHOW_TIMER,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+        )
+    }
+
+    private fun scheduleInexact(
+        alarmManager: AlarmManager,
+        triggerAtElapsedRealtime: Long,
+        operation: PendingIntent
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerAtElapsedRealtime,
+                operation
+            )
+        } else {
+            alarmManager.set(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerAtElapsedRealtime,
+                operation
+            )
+        }
+    }
+
     private fun immutableFlag(): Int {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_IMMUTABLE
@@ -82,4 +96,5 @@ object PomodoroAlarmScheduler {
     }
 
     private const val REQUEST_COMPLETE = 7301
+    private const val REQUEST_SHOW_TIMER = 7305
 }

@@ -24,7 +24,8 @@ data class PomodoroState(
     val pausedRemainingMillis: Long = DEFAULT_DURATION_MILLIS,
     val deadlineElapsedRealtime: Long = 0L,
     val deadlineEpochMillis: Long = 0L,
-    val bootCount: Int = UNKNOWN_BOOT_COUNT
+    val bootCount: Int = UNKNOWN_BOOT_COUNT,
+    val completionDialogPending: Boolean = false
 ) {
     val isActive: Boolean
         get() = phase == PomodoroPhase.RUNNING || phase == PomodoroPhase.PAUSED
@@ -50,7 +51,7 @@ data class PomodoroState(
 
     companion object {
         const val UNKNOWN_BOOT_COUNT = -1
-        const val DEFAULT_DURATION_MINUTES = 25
+        const val DEFAULT_DURATION_MINUTES = 5
         const val DEFAULT_DURATION_MILLIS = DEFAULT_DURATION_MINUTES * 60_000L
 
         fun running(durationMillis: Long, now: PomodoroNow): PomodoroState {

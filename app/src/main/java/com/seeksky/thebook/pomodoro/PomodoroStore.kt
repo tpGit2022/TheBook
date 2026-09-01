@@ -33,6 +33,10 @@ class PomodoroStore(context: Context) {
             bootCount = preferences.getInt(
                 KEY_BOOT_COUNT,
                 PomodoroState.UNKNOWN_BOOT_COUNT
+            ),
+            completionDialogPending = preferences.getBoolean(
+                KEY_COMPLETION_DIALOG_PENDING,
+                false
             )
         )
     }
@@ -46,6 +50,7 @@ class PomodoroStore(context: Context) {
             .putLong(KEY_DEADLINE_ELAPSED, state.deadlineElapsedRealtime)
             .putLong(KEY_DEADLINE_EPOCH, state.deadlineEpochMillis)
             .putInt(KEY_BOOT_COUNT, state.bootCount)
+            .putBoolean(KEY_COMPLETION_DIALOG_PENDING, state.completionDialogPending)
             .commit()
     }
 
@@ -57,5 +62,6 @@ class PomodoroStore(context: Context) {
         const val KEY_DEADLINE_ELAPSED = "deadline_elapsed"
         const val KEY_DEADLINE_EPOCH = "deadline_epoch"
         const val KEY_BOOT_COUNT = "boot_count"
+        const val KEY_COMPLETION_DIALOG_PENDING = "completion_dialog_pending"
     }
 }

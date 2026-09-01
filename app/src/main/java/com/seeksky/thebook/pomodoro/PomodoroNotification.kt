@@ -137,23 +137,37 @@ object PomodoroNotification {
         }
     }
 
-    fun notifyComplete(context: Context) {
-        val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
+    fun notifyComplete(context: Context, useFullScreenIntent: Boolean) {
+        val completionIntent = completionPendingIntent(context)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ALERTS)
             .setSmallIcon(R.drawable.ic_pomodoro_timer_24)
             .setContentTitle(context.getString(R.string.pomodoro_complete_title))
             .setContentText(context.getString(R.string.pomodoro_complete_message))
-            .setContentIntent(contentPendingIntent(context))
+            .setContentIntent(completionIntent)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
-            .build()
-        notificationManager(context).notify(COMPLETE_NOTIFICATION_ID, notification)
+        if (useFullScreenIntent) {
+            builder.setFullScreenIntent(completionIntent, true)
+        }
+        notificationManager(context).notify(COMPLETE_NOTIFICATION_ID, builder.build())
     }
 
     fun cancelComplete(context: Context) {
         notificationManager(context).cancel(COMPLETE_NOTIFICATION_ID)
+    }
+
+    fun cancelRunning(context: Context) {
+        notificationManager(context).cancel(RUNNING_NOTIFICATION_ID)
+    }
+
+    fun completionAlertsCanInterrupt(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        val channel = notificationManager(context).getNotificationChannel(CHANNEL_ALERTS)
+            ?: return true
+        return channel.importance >= NotificationManager.IMPORTANCE_HIGH
     }
 
     private fun contentPendingIntent(context: Context): PendingIntent {
@@ -163,6 +177,22 @@ object PomodoroNotification {
         return PendingIntent.getActivity(
             context,
             REQUEST_CONTENT,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+        )
+    }
+
+    private fun completionPendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, PomodoroCompletionActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            )
+        }
+        return PendingIntent.getActivity(
+            context,
+            REQUEST_COMPLETE,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )
@@ -207,8 +237,9 @@ object PomodoroNotification {
     }
 
     private const val CHANNEL_RUNNING = "pomodoro_running"
-    private const val CHANNEL_ALERTS = "pomodoro_alerts"
+    const val CHANNEL_ALERTS = "pomodoro_alerts"
     private const val REQUEST_CONTENT = 7300
+    private const val REQUEST_COMPLETE = 7301
     private const val REQUEST_PAUSE = 7302
     private const val REQUEST_RESUME = 7303
     private const val REQUEST_CANCEL = 7304

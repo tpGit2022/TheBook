@@ -8,6 +8,8 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 
 class PomodoroService : Service() {
 
@@ -190,11 +192,17 @@ class PomodoroService : Service() {
         val finished = PomodoroState(
             phase = PomodoroPhase.FINISHED,
             durationMillis = previous.durationMillis,
-            pausedRemainingMillis = 0L
+            pausedRemainingMillis = 0L,
+            completionDialogPending = true
         )
         saveAndPublish(finished)
         stopForeground(true)
-        PomodoroNotification.notifyComplete(this)
+        val appIsForeground = ProcessLifecycleOwner.get().lifecycle.currentState
+            .isAtLeast(Lifecycle.State.STARTED)
+        PomodoroNotification.notifyComplete(
+            this,
+            useFullScreenIntent = !appIsForeground
+        )
         stopSelf()
     }
 

@@ -1,10 +1,14 @@
 package com.seeksky.thebook.ui
 
 import android.app.Application
+import android.app.NotificationManager
+import android.os.Build
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import com.seeksky.thebook.pomodoro.PomodoroClock
+import com.seeksky.thebook.pomodoro.PomodoroPhase
+import com.seeksky.thebook.pomodoro.PomodoroNotification
 import com.seeksky.thebook.pomodoro.PomodoroService
 import com.seeksky.thebook.pomodoro.PomodoroState
 import com.seeksky.thebook.pomodoro.PomodoroStateRepository
@@ -40,6 +44,20 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
         PomodoroService.complete(getApplication())
     }
 
+    fun acknowledgeCompletionDialog() {
+        val application = getApplication<Application>()
+        val current = PomodoroStateRepository.current(application)
+        if (
+            current.phase == PomodoroPhase.FINISHED &&
+            current.completionDialogPending
+        ) {
+            PomodoroStateRepository.update(
+                application,
+                current.copy(completionDialogPending = false)
+            )
+        }
+    }
+
     fun refresh() {
         PomodoroStateRepository.refresh(getApplication())
     }
@@ -50,5 +68,21 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
 
     fun notificationsEnabled(): Boolean {
         return NotificationManagerCompat.from(getApplication()).areNotificationsEnabled()
+    }
+
+    fun fullScreenIntentsEnabled(): Boolean {
+        if (Build.VERSION.SDK_INT < 34) return true
+
+        val application = getApplication<Application>()
+        val notificationManager = application.getSystemService(NotificationManager::class.java)
+        return runCatching {
+            NotificationManager::class.java
+                .getMethod("canUseFullScreenIntent")
+                .invoke(notificationManager) as Boolean
+        }.getOrDefault(true)
+    }
+
+    fun completionAlertsCanInterrupt(): Boolean {
+        return PomodoroNotification.completionAlertsCanInterrupt(getApplication())
     }
 }
